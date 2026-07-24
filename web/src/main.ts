@@ -13,6 +13,7 @@ import { project } from "./starfield/projection";
 import { MeteorShower } from "./starfield/meteors";
 import { showDetailCard, hideDetailCard } from "./ui/detailCard";
 import { enterFallback } from "./ui/fallback";
+import { initCursor } from "./ui/cursor";
 import { detectSupport } from "./starfield/support";
 import { registerChapter, startScrollManager } from "./scroll/scrollManager";
 import { defaultView, type SkyView } from "./scroll/view";
@@ -48,7 +49,33 @@ const meteors = new MeteorShower();
 type RenderMode = "flat" | "globe" | "epoch";
 let mode: RenderMode = "flat";
 
+/* ---- 章节切换 concealer 墨刃横扫 ---- */
+const wipeEl = document.getElementById("wipe") as HTMLElement;
+let lastWipeAt = -1e9;
+
+function fireWipe(): void {
+  const now = performance.now();
+  if (now - lastWipeAt < 1500) return;
+  lastWipeAt = now;
+  wipeEl.classList.remove("reset");
+  void wipeEl.offsetWidth; // 强制 reflow，让 reset 位置生效
+  wipeEl.classList.add("go");
+  window.setTimeout(() => {
+    wipeEl.classList.remove("go");
+    wipeEl.classList.add("reset");
+  }, 1250);
+}
+
+/* ---- 引力透镜光标位置（屏幕坐标） ---- */
+const lens = { x: -1e4, y: -1e4 };
+let currentChapterId = "";
+
 function setChapter(id: string): void {
+  if (id !== currentChapterId) {
+    // 首次（序章开场）不扫；之后每次换章墨刃横扫
+    if (currentChapterId !== "") fireWipe();
+    currentChapterId = id;
+  }
   const next: RenderMode = id === "ch-globe" ? "globe" : id === "ch-epoch" ? "epoch" : "flat";
   if (next !== mode) {
     mode = next;
@@ -137,6 +164,7 @@ function tick(nowMs: number): void {
     labelIndices: view.labels,
     showLines: view.showLines,
     skipClear: globeMode,
+    lens: globeMode ? null : lens,
   });
   if (mode === "epoch") drawEpochOverlay(ctx, camera, layout);
   meteors.update(nowMs / 1000, W, H);
@@ -218,6 +246,19 @@ if (ctxNull) {
 
   window.addEventListener("scroll", () => { atlasActive = false; }, { passive: true, capture: true });
   window.addEventListener("resize", () => { resize(); lastFrame = 0; });
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      lens.x = e.clientX;
+      lens.y = e.clientY;
+    },
+    { passive: true },
+  );
+  document.documentElement.addEventListener("pointerleave", () => {
+    lens.x = -1e4;
+    lens.y = -1e4;
+  });
 
+  initCursor();
   void boot();
 }

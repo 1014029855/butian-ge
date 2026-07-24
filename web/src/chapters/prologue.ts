@@ -31,6 +31,19 @@ export function updatePrologue(view: SkyView, camera: Camera, p: number): void {
 
   const cue = document.getElementById("scroll-cue");
   if (cue) cue.style.opacity = String(Math.max(0, 1 - p * 4));
+
+  // 巨幅书法：滚动时缓慢推近放大，尾段淡出；文字块向左漂移
+  const hero = document.getElementById("hero-brush");
+  if (hero) {
+    hero.style.transform = `scale(${(1 + p * 0.16).toFixed(4)}) translateY(${(-p * 4).toFixed(2)}vh)`;
+    hero.style.opacity = String(Math.max(0, 0.94 * (1 - Math.max(0, (p - 0.72) / 0.28))));
+  }
+  const center = document.querySelector<HTMLElement>(".prologue-center");
+  if (center) {
+    const drift = Math.max(0, (p - 0.55) / 0.45);
+    center.style.transform = `translateX(${(-drift * 7).toFixed(2)}vw)`;
+    center.style.opacity = String(1 - drift);
+  }
 }
 
 /** 离开序章后 baseK 作废，回章时重新采样。 */
