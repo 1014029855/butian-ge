@@ -39,6 +39,9 @@ export interface LayoutStar {
   dec: number;
   x: number;
   y: number;
+  /** morph 动画起点坐标（beginMorph 时快照） */
+  ox: number;
+  oy: number;
   r: number;
   baseAlpha: number;
   name: string | null;
@@ -60,12 +63,23 @@ export interface LayoutAsterism {
 
 /** 任意投影函数；返回 visible=false 表示该点在背面半球 */
 export type AnyProjector = (raDeg: number, decDeg: number) => { x: number; y: number; visible?: boolean };
+
+/** 投影切换 morph 动画状态（星点从旧坐标飞向新坐标） */
+export interface MorphState {
+  /** 起始时刻（performance.now 毫秒） */
+  t0: number;
+  /** 时长（毫秒） */
+  dur: number;
+}
+
 export interface SkyLayout {
   stars: LayoutStar[];
   asterisms: LayoutAsterism[];
   /** hip → 所属星官索引（命中检测后反查高亮） */
   starAsterism: Map<number, number>;
   nameIndex: Map<string, number>;
+  /** 进行中的投影切换动画；null 表示无动画 */
+  morph: MorphState | null;
 }
 
 export function buildLayout(
@@ -79,6 +93,8 @@ export function buildLayout(
     dec: s.dec,
     x: 0,
     y: 0,
+    ox: 0,
+    oy: 0,
     r: magToRadius(s.mag),
     baseAlpha: magToAlpha(s.mag),
     name: s.name,
@@ -120,9 +136,31 @@ export function buildLayout(
     });
   });
 
-  const layout: SkyLayout = { stars, asterisms, starAsterism, nameIndex };
+  const layout: SkyLayout = { stars, asterisms, starAsterism, nameIndex, morph: null };
   reprojectLayout(layout, projector);
   return layout;
+}
+
+/**
+ * 投影切换动画：快照当前坐标 → 重投影 → 记录 morph 状态。
+ * renderSky 在 morph 期间对每颗星做位置补间，新背面星淡出、新正面星淡入。
+ */
+export function beginMorph(
+  layout: SkyLayout,
+  projector: AnyProjector,
+  t0Ms: number,
+  durMs = 1300,
+): void {
+  for (const s of layout.stars) {
+    s.ox = s.x;
+    s.oy = s.y;
+  }
+  reprojectLayout(layout, projector);
+  layout.morph = { t0: t0Ms, dur: durMs };
+}
+
+export function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 /**
@@ -205,12 +243,20 @@ export function renderSky(
 
   if (!skipClear) ctx.clearRect(0, 0, width, height);
 
+  // morph 进度（投影切换动画）：星点位置补间，线段随进度淡入
+  let mu = 1;
+  if (layout.morph) {
+    mu = Math.min(1, Math.max(0, (tSec * 1000 - layout.morph.t0) / layout.morph.dur));
+  }
+  const morphing = mu < 1;
+  const ue = easeInOutCubic(mu);
+
   if (showLines) {
     for (let ai = 0; ai < layout.asterisms.length; ai++) {
       if (visibleAsterisms && !visibleAsterisms.has(ai)) continue;
       const a = layout.asterisms[ai];
       const hot = highlightIndices?.has(ai) ?? false;
-      const alpha = revealAlpha(ai);
+      const alpha = revealAlpha(ai) * (morphing ? ue : 1);
       if (alpha <= 0.003) continue;
       ctx.strokeStyle = hot ? "#c9a227" : "#af915f";
       ctx.globalAlpha = hot ? Math.max(0.95, alpha) : alpha;
@@ -237,11 +283,26 @@ export function renderSky(
   const R_SCALE = 1.4;
   ctx.globalCompositeOperation = "lighter";
   for (const s of layout.stars) {
-    if (s.hidden) continue;
-    const w = rot(s.x, s.y, rotation);
+    let wx = s.x;
+    let wy = s.y;
+    let fade = 1;
+    if (s.hidden) {
+      if (!morphing) continue;
+      // 新位置在背面：动画期间沿补间路径飞出并淡出
+      wx = s.ox + (s.x - s.ox) * ue;
+      wy = s.oy + (s.y - s.oy) * ue;
+      fade = 1 - ue;
+    } else if (morphing) {
+      wx = s.ox + (s.x - s.ox) * ue;
+      wy = s.oy + (s.y - s.oy) * ue;
+      // 起点在背面（旧帧被跳过绘制）：淡入
+      // 用起点是否在旧投影中可见近似：ox/oy 未绘制时同样补间，alpha 渐进
+      fade = ue < 1 ? Math.max(0.15, ue) : 1;
+    }
+    const w = rot(wx, wy, rotation);
     const p = camera.toScreen(w.x, w.y);
     if (p.x < -12 || p.y < -12 || p.x > width + 12 || p.y > height + 12) continue;
-    const alpha = s.baseAlpha * twinkleOpacity(s.tw, tSec) * dimStarAlpha;
+    const alpha = s.baseAlpha * twinkleOpacity(s.tw, tSec) * dimStarAlpha * fade;
     if (alpha <= 0.003) continue;
     const r = s.r * R_SCALE;
     if (r >= 2.4) {

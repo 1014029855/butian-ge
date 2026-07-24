@@ -4,7 +4,7 @@ import { hitTestStar } from "./starfield/hitTest";
 import {
   buildLayout,
   renderSky,
-  reprojectLayout,
+  beginMorph,
   type StarsJson,
   type AsterismsJson,
   type SkyLayout,
@@ -22,7 +22,7 @@ import { initGnomon, updateGnomon } from "./chapters/gnomon";
 import { updateZiwei } from "./chapters/ziwei";
 import { initEastWest, updateEastWest } from "./chapters/eastwest";
 import { initGlobe, updateGlobe, leaveGlobe, tickGlobe, drawGlobeOverlay } from "./chapters/globe";
-import { initEpoch, updateEpoch, leaveEpoch, drawEpochOverlay } from "./chapters/epoch";
+import { initEpoch, updateEpoch, leaveEpoch, drawEpochOverlay, tickEpoch } from "./chapters/epoch";
 
 const canvas = document.getElementById("sky") as HTMLCanvasElement;
 const card = document.getElementById("detail-card") as HTMLElement;
@@ -52,12 +52,16 @@ function setChapter(id: string): void {
   const next: RenderMode = id === "ch-globe" ? "globe" : id === "ch-epoch" ? "epoch" : "flat";
   if (next !== mode) {
     mode = next;
-    if (mode === "flat" && layout) reprojectLayout(layout, project);
+    // 从球仪/时间机切回平面：星点飞回原位（globe/epoch 的入场 morph 由各自模块触发）
+    if (mode === "flat" && layout) beginMorph(layout, project, performance.now());
     lastFrame = 0;
   }
   if (id !== "ch-globe") leaveGlobe();
   if (id !== "ch-epoch") leaveEpoch();
   if (id !== "ch-prologue") resetPrologue();
+  // 章节文字入场动画
+  document.querySelectorAll(".chapter").forEach((el) => el.classList.remove("inview"));
+  document.getElementById(id)?.classList.add("inview");
 }
 
 function resize(): void {
@@ -81,7 +85,7 @@ async function boot(): Promise<void> {
 
   initAtlasDom();
   initGnomon();
-  initGlobe(canvas, layout);
+  initGlobe(canvas, layout, camera, view, card);
   initEpoch(layout, () => { lastFrame = 0; });
   void initEastWest(layout, starsJson);
 
@@ -109,8 +113,12 @@ async function boot(): Promise<void> {
 function tick(nowMs: number): void {
   requestAnimationFrame(tick);
   if (!layout) return;
+  // morph 动画完成判定
+  const morphing = layout.morph !== null;
+  if (morphing && nowMs - layout.morph!.t0 >= layout.morph!.dur) layout.morph = null;
   const globeDirty = mode === "globe" && tickGlobe(nowMs);
-  if (!globeDirty && nowMs - lastFrame < 33) return;
+  const epochDirty = mode === "epoch" && tickEpoch(nowMs);
+  if (!globeDirty && !epochDirty && !morphing && nowMs - lastFrame < 33) return;
   lastFrame = nowMs;
   const W = window.innerWidth;
   const H = window.innerHeight;
@@ -176,7 +184,10 @@ if (ctxNull) {
     if (!interactive() || !layout) return;
     if (moved < 4) {
       const w = camera.toWorld(e.clientX, e.clientY);
-      const idx = hitTestStar(layout.stars, w.x, w.y, 10 / camera.k);
+      const idx = hitTestStar(
+        layout.stars, w.x, w.y, 10 / camera.k,
+        (s) => layout!.starAsterism.has(s.hip),
+      );
       if (idx >= 0) {
         const ai = layout.starAsterism.get(layout.stars[idx].hip);
         if (ai !== undefined) {

@@ -1,7 +1,9 @@
 import type { SkyView } from "../scroll/view";
 import type { SkyLayout } from "../starfield/renderer";
-import { reprojectLayout } from "../starfield/renderer";
+import { reprojectLayout, beginMorph } from "../starfield/renderer";
 import { makeOrthoProjector } from "../starfield/projection";
+import { hitTestStar } from "../starfield/hitTest";
+import { showDetailCard, hideDetailCard } from "../ui/detailCard";
 import type { Camera } from "../starfield/camera";
 
 /**
@@ -23,16 +25,31 @@ let lastInteract = 0;
 let entered = false;
 let active = false;
 let layoutRef: SkyLayout | null = null;
+let viewRef: SkyView | null = null;
+let cameraRef: Camera | null = null;
+let cardRef: HTMLElement | null = null;
 let dirty = true;
+let zoomK = 1; // 用户滚轮缩放系数（相对 fit）
+let dragMoved = 0;
 
 const AUTO_SPIN = 3.5; // 自动慢转角速度（度/秒）
 
-export function initGlobe(canvas: HTMLCanvasElement, layout: SkyLayout): void {
+export function initGlobe(
+  canvas: HTMLCanvasElement,
+  layout: SkyLayout,
+  camera: Camera,
+  view: SkyView,
+  card: HTMLElement,
+): void {
   layoutRef = layout;
+  cameraRef = camera;
+  viewRef = view;
+  cardRef = card;
 
   canvas.addEventListener("pointerdown", (e) => {
     if (!active) return;
     dragging = true;
+    dragMoved = 0;
     lastX = e.clientX;
     lastY = e.clientY;
     lastT = performance.now();
@@ -47,6 +64,7 @@ export function initGlobe(canvas: HTMLCanvasElement, layout: SkyLayout): void {
     const dt = Math.max(1, now - lastT) / 1000;
     const dRa = (e.clientX - lastX) * 0.18;
     const dDec = (e.clientY - lastY) * 0.18;
+    dragMoved += Math.abs(e.clientX - lastX) + Math.abs(e.clientY - lastY);
     centerRa = (centerRa + dRa + 360) % 360;
     centerDec = Math.min(89, Math.max(-89, centerDec + dDec));
     velRa = dRa / dt;
@@ -58,16 +76,51 @@ export function initGlobe(canvas: HTMLCanvasElement, layout: SkyLayout): void {
     dirty = true;
   });
 
-  const end = () => {
+  const end = (e?: PointerEvent) => {
     if (!dragging) return;
     dragging = false;
     lastInteract = performance.now();
     // 惯性限速，避免甩飞
     velRa = Math.min(240, Math.max(-240, velRa));
     velDec = Math.min(180, Math.max(-180, velDec));
+    // 轻击（几乎没拖动）→ 点击星官看详情（只命中星官成员星）
+    if (e && dragMoved < 5 && active && layoutRef && cameraRef && viewRef) {
+      const w = cameraRef.toWorld(e.clientX, e.clientY);
+      const idx = hitTestStar(
+        layoutRef.stars, w.x, w.y, 10 / cameraRef.k,
+        (s) => layoutRef!.starAsterism.has(s.hip),
+      );
+      if (idx >= 0) {
+        const ai = layoutRef.starAsterism.get(layoutRef.stars[idx].hip);
+        if (ai !== undefined) {
+          viewRef.highlight = new Set([ai]);
+          viewRef.labels = [ai];
+          if (cardRef) showDetailCard(cardRef, layoutRef.asterisms[ai], { x: e.clientX, y: e.clientY });
+          dirty = true;
+          return;
+        }
+      }
+      viewRef.highlight = null;
+      viewRef.labels = [];
+      if (cardRef) hideDetailCard(cardRef);
+      dirty = true;
+    }
   };
   canvas.addEventListener("pointerup", end);
-  canvas.addEventListener("pointercancel", end);
+  canvas.addEventListener("pointercancel", () => end());
+
+  // 滚轮缩放（仅在球仪章节拦截）
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      if (!active) return;
+      e.preventDefault();
+      zoomK = Math.min(3, Math.max(0.55, zoomK * Math.exp(-e.deltaY * 0.001)));
+      lastInteract = performance.now();
+      dirty = true;
+    },
+    { passive: false },
+  );
 }
 
 /** main tick 每帧调用；返回 true 表示本帧重投影过，需要重绘。 */
@@ -97,17 +150,24 @@ export function updateGlobe(view: SkyView, camera: Camera): void {
   active = true;
   if (!entered) {
     entered = true;
-    // 入场冲击：甩一下天球
+    // 入场冲击：甩一下天球；星点从平面投影飞成球面
     velRa = -160;
     lastInteract = performance.now();
+    if (layoutRef) {
+      beginMorph(layoutRef, makeOrthoProjector(centerRa, centerDec), performance.now());
+      dirty = false; // morph 期间由 renderSky 补间，无需再重投影
+    }
+    view.highlight = null;
+    view.labels = [];
   }
   camera.fit(1, window.innerWidth, window.innerHeight, 90);
+  camera.k *= zoomK;
+  camera.tx = window.innerWidth / (2 * camera.k);
+  camera.ty = window.innerHeight / (2 * camera.k);
 
   view.rotation = 0;
   view.showLines = true;
   view.visible = null;
-  view.highlight = null;
-  view.labels = [];
   view.freeExplore = false;
   view.dimStarAlpha = 1;
   view.revealAlpha = () => 0.5;
@@ -116,6 +176,8 @@ export function updateGlobe(view: SkyView, camera: Camera): void {
 export function leaveGlobe(): void {
   active = false;
   entered = false;
+  zoomK = 1;
+  if (cardRef) hideDetailCard(cardRef);
 }
 
 /** 球缘与经纬网叠加（renderSky 之前画，垫在星点下面）。 */

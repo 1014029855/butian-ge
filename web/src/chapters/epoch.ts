@@ -1,6 +1,6 @@
 import type { SkyView } from "../scroll/view";
 import type { SkyLayout } from "../starfield/renderer";
-import { reprojectLayout } from "../starfield/renderer";
+import { reprojectLayout, beginMorph } from "../starfield/renderer";
 import { project } from "../starfield/projection";
 import { precess, poleAt } from "../starfield/precession";
 import type { Camera } from "../starfield/camera";
@@ -30,6 +30,9 @@ let entered = false;
 let sliderEl: HTMLInputElement | null = null;
 let yearEl: HTMLElement | null = null;
 let eraEl: HTMLElement | null = null;
+let playEl: HTMLButtonElement | null = null;
+let playing = false;
+let redraw: (() => void) | null = null;
 let lastRebuild = 0;
 
 function epochProjector(y: number) {
@@ -40,9 +43,10 @@ function epochProjector(y: number) {
 }
 
 function fmtYear(y: number): string {
-  if (y < 0) return `公元前 ${-y} 年`;
-  if (y <= 2026) return `公元 ${y} 年`;
-  return `公元 ${y} 年 · 未来`;
+  const r = Math.round(y);
+  if (r < 0) return `公元前 ${-r} 年`;
+  if (r <= 2026) return `公元 ${r} 年`;
+  return `公元 ${r} 年 · 未来`;
 }
 
 function currentEra(y: number): (typeof ERAS)[number] | null {
@@ -58,14 +62,25 @@ function refreshDom(): void {
 
 export function initEpoch(layout: SkyLayout, onRedraw?: () => void): void {
   layoutRef = layout;
+  redraw = onRedraw ?? null;
   sliderEl = document.getElementById("epoch-slider") as HTMLInputElement | null;
   yearEl = document.getElementById("epoch-year");
   eraEl = document.getElementById("epoch-era");
+  playEl = document.getElementById("epoch-play") as HTMLButtonElement | null;
+  if (playEl) {
+    playEl.addEventListener("click", () => {
+      playing = !playing;
+      if (playing && year >= EPOCH_MAX) year = EPOCH_MIN; // 播完了再按就重头
+      updatePlayBtn();
+    });
+  }
   if (sliderEl) {
     sliderEl.min = String(EPOCH_MIN);
     sliderEl.max = String(EPOCH_MAX);
     sliderEl.value = String(year);
     sliderEl.addEventListener("input", () => {
+      playing = false;
+      updatePlayBtn();
       year = Number(sliderEl!.value);
       // 拖动时节流重投影（33ms）
       const now = performance.now();
@@ -74,13 +89,41 @@ export function initEpoch(layout: SkyLayout, onRedraw?: () => void): void {
         reprojectLayout(layoutRef, epochProjector(year));
       }
       refreshDom();
-      onRedraw?.();
+      redraw?.();
     });
     sliderEl.addEventListener("change", () => {
       if (layoutRef) reprojectLayout(layoutRef, epochProjector(year));
-      onRedraw?.();
+      redraw?.();
     });
   }
+}
+
+function updatePlayBtn(): void {
+  if (playEl) playEl.textContent = playing ? "⏸ 停在这一年" : "▶ 播放一万七千年";
+}
+
+/** 播放速度：约 18 秒流完全程 */
+const PLAY_SPEED = (EPOCH_MAX - EPOCH_MIN) / 18; // 年/秒
+let lastPlayTick = 0;
+
+/** main tick 每帧调用；播放中推进年份，返回 true 表示需要重绘。 */
+export function tickEpoch(nowMs: number): boolean {
+  if (!active || !playing || !layoutRef) return false;
+  const dt = lastPlayTick ? (nowMs - lastPlayTick) / 1000 : 0;
+  lastPlayTick = nowMs;
+  year = Math.min(EPOCH_MAX, year + PLAY_SPEED * dt);
+  if (year >= EPOCH_MAX) {
+    playing = false;
+    updatePlayBtn();
+  }
+  const now = performance.now();
+  if (now - lastRebuild > 40) {
+    lastRebuild = now;
+    reprojectLayout(layoutRef, epochProjector(year));
+  }
+  if (sliderEl) sliderEl.value = String(Math.round(year));
+  refreshDom();
+  return true;
 }
 
 export function updateEpoch(view: SkyView, camera: Camera): void {
@@ -89,7 +132,7 @@ export function updateEpoch(view: SkyView, camera: Camera): void {
     entered = true;
     year = 2026;
     if (sliderEl) sliderEl.value = String(year);
-    if (layoutRef) reprojectLayout(layoutRef, epochProjector(year));
+    if (layoutRef) beginMorph(layoutRef, epochProjector(year), performance.now());
     refreshDom();
   }
   camera.coverFit(Math.PI, window.innerWidth, window.innerHeight, 1.02);
@@ -107,6 +150,9 @@ export function updateEpoch(view: SkyView, camera: Camera): void {
 export function leaveEpoch(): void {
   active = false;
   entered = false;
+  playing = false;
+  lastPlayTick = 0;
+  updatePlayBtn();
 }
 
 /** 天极轨迹 + 北极星标注叠加（renderSky 之后画）。 */
