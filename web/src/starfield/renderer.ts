@@ -34,20 +34,32 @@ export interface WesternJson { constellations: WesternRecord[] }
 
 export interface LayoutStar {
   hip: number;
+  /** J2000 赤道坐标（度），重投影的源数据 */
+  ra: number;
+  dec: number;
   x: number;
   y: number;
   r: number;
   baseAlpha: number;
   name: string | null;
   tw: TwinkleParams;
+  /** 正射投影下位于背面半球时为 true，渲染跳过 */
+  hidden: boolean;
 }
 export interface LayoutAsterism {
   id: string;
   name: string;
+  /** 原始连线（hip 对），重投影时重建 segments */
+  linePairs: [number, number][];
+  /** 成员星 hip，重投影时重算 labelPos */
+  memberHips: number[];
   segments: { x1: number; y1: number; x2: number; y2: number }[];
   labelPos: { x: number; y: number };
   memberNames: string[];
 }
+
+/** 任意投影函数；返回 visible=false 表示该点在背面半球 */
+export type AnyProjector = (raDeg: number, decDeg: number) => { x: number; y: number; visible?: boolean };
 export interface SkyLayout {
   stars: LayoutStar[];
   asterisms: LayoutAsterism[];
@@ -56,53 +68,92 @@ export interface SkyLayout {
   nameIndex: Map<string, number>;
 }
 
-export function buildLayout(starsJson: StarsJson, asterismsJson: AsterismsJson): SkyLayout {
-  const stars: LayoutStar[] = starsJson.stars.map((s) => {
-    const p = project(s.ra, s.dec);
-    return {
-      hip: s.hip,
-      x: p.x,
-      y: p.y,
-      r: magToRadius(s.mag),
-      baseAlpha: magToAlpha(s.mag),
-      name: s.name,
-      tw: makeTwinkleParams(mulberry32(s.hip)),
-    };
-  });
-  const pos = new Map<number, LayoutStar>();
-  for (const s of stars) pos.set(s.hip, s);
+export function buildLayout(
+  starsJson: StarsJson,
+  asterismsJson: AsterismsJson,
+  projector: AnyProjector = project,
+): SkyLayout {
+  const stars: LayoutStar[] = starsJson.stars.map((s) => ({
+    hip: s.hip,
+    ra: s.ra,
+    dec: s.dec,
+    x: 0,
+    y: 0,
+    r: magToRadius(s.mag),
+    baseAlpha: magToAlpha(s.mag),
+    name: s.name,
+    tw: makeTwinkleParams(mulberry32(s.hip)),
+    hidden: false,
+  }));
 
   const starAsterism = new Map<number, number>();
   const nameIndex = new Map<string, number>();
   const asterisms: LayoutAsterism[] = [];
-  asterismsJson.asterisms.forEach((a, ai) => {
-    const segments = [];
+  const byHip = new Map<number, LayoutStar>();
+  for (const s of stars) byHip.set(s.hip, s);
+
+  asterismsJson.asterisms.forEach((a) => {
+    const linePairs: [number, number][] = [];
     for (const [h1, h2] of a.lines) {
-      const s1 = pos.get(h1);
-      const s2 = pos.get(h2);
-      if (s1 && s2) segments.push({ x1: s1.x, y1: s1.y, x2: s2.x, y2: s2.y });
+      if (byHip.has(h1) && byHip.has(h2)) linePairs.push([h1, h2]);
     }
-    if (!segments.length) return;
-    let mx = 0, my = 0, n = 0;
+    if (!linePairs.length) return;
+    const memberHips: number[] = [];
     const memberNames: string[] = [];
     for (const h of a.stars) {
-      const s = pos.get(h);
+      const s = byHip.get(h);
       if (!s) continue;
-      mx += s.x; my += s.y; n++;
+      memberHips.push(h);
       if (s.name) memberNames.push(s.name);
-      if (!starAsterism.has(h)) starAsterism.set(h, ai);
+      if (!starAsterism.has(h)) starAsterism.set(h, asterisms.length);
     }
-    if (!n) return;
+    if (!memberHips.length) return;
     nameIndex.set(a.name, asterisms.length);
     asterisms.push({
       id: a.id,
       name: a.name,
-      segments,
-      labelPos: { x: mx / n, y: my / n },
+      linePairs,
+      memberHips,
+      segments: [],
+      labelPos: { x: 0, y: 0 },
       memberNames,
     });
   });
-  return { stars, asterisms, starAsterism, nameIndex };
+
+  const layout: SkyLayout = { stars, asterisms, starAsterism, nameIndex };
+  reprojectLayout(layout, projector);
+  return layout;
+}
+
+/**
+ * 用新投影函数重建布局中所有派生坐标（星位、线段、标签位）。
+ * 天球仪转球 / 岁差时间机拖动时调用；5563 星全量重建约 2-4ms。
+ */
+export function reprojectLayout(layout: SkyLayout, projector: AnyProjector): void {
+  const pos = new Map<number, LayoutStar>();
+  for (const s of layout.stars) {
+    const p = projector(s.ra, s.dec);
+    s.x = p.x;
+    s.y = p.y;
+    s.hidden = p.visible === false;
+    pos.set(s.hip, s);
+  }
+  for (const a of layout.asterisms) {
+    a.segments = [];
+    for (const [h1, h2] of a.linePairs) {
+      const s1 = pos.get(h1);
+      const s2 = pos.get(h2);
+      if (!s1 || !s2 || s1.hidden || s2.hidden) continue;
+      a.segments.push({ x1: s1.x, y1: s1.y, x2: s2.x, y2: s2.y });
+    }
+    let mx = 0, my = 0, n = 0;
+    for (const h of a.memberHips) {
+      const s = pos.get(h);
+      if (!s || s.hidden) continue;
+      mx += s.x; my += s.y; n++;
+    }
+    if (n) a.labelPos = { x: mx / n, y: my / n };
+  }
 }
 
 /* ---------- 渲染 ---------- */
@@ -122,6 +173,8 @@ export interface RenderOptions {
   labelIndices?: number[];
   /** 是否画连线，默认 true */
   showLines?: boolean;
+  /** 跳过清屏（调用方已绘制底衬，如天球仪球体） */
+  skipClear?: boolean;
 }
 
 function rot(x: number, y: number, theta: number): { x: number; y: number } {
@@ -147,9 +200,10 @@ export function renderSky(
     visibleAsterisms = null,
     labelIndices = [],
     showLines = true,
+    skipClear = false,
   } = opts;
 
-  ctx.clearRect(0, 0, width, height);
+  if (!skipClear) ctx.clearRect(0, 0, width, height);
 
   if (showLines) {
     for (let ai = 0; ai < layout.asterisms.length; ai++) {
@@ -183,6 +237,7 @@ export function renderSky(
   const R_SCALE = 1.4;
   ctx.globalCompositeOperation = "lighter";
   for (const s of layout.stars) {
+    if (s.hidden) continue;
     const w = rot(s.x, s.y, rotation);
     const p = camera.toScreen(w.x, w.y);
     if (p.x < -12 || p.y < -12 || p.x > width + 12 || p.y > height + 12) continue;

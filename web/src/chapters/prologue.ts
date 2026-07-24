@@ -1,8 +1,26 @@
 import type { SkyView } from "../scroll/view";
+import type { Camera } from "../starfield/camera";
 
-/** 序章：星空缓慢自转，连线渐显，标题由 CSS/DOM 承担。 */
-export function updatePrologue(view: SkyView, p: number): void {
-  view.rotation = p * 0.4;
+/**
+ * 序章：cinematic 开场。
+ * 镜头从北天极深处（6 倍放大）随滚动缓缓拉升，到整片星野尽收眼底；
+ * 星空缓慢自转，连线渐显。
+ */
+let baseK: number | null = null;
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+export function updatePrologue(view: SkyView, camera: Camera, p: number): void {
+  // 拉升镜头：前 55% 进度内从 5.2 倍近景拉到 coverFit 全景
+  if (baseK === null) baseK = camera.k; // 进入时为 coverFit 值
+  const pull = easeOutCubic(Math.min(1, p / 0.55));
+  camera.k = baseK * (5.2 - (5.2 - 1) * pull);
+  camera.tx = window.innerWidth / (2 * camera.k);
+  camera.ty = window.innerHeight / (2 * camera.k);
+
+  view.rotation = p * 0.4 + (1 - pull) * 0.35; // 近景时转得稍快，有穿越感
   view.showLines = p > 0.18;
   view.dimStarAlpha = 1;
   view.revealAlpha = () => Math.min(0.45, Math.max(0, (p - 0.18) * 0.8));
@@ -13,4 +31,9 @@ export function updatePrologue(view: SkyView, p: number): void {
 
   const cue = document.getElementById("scroll-cue");
   if (cue) cue.style.opacity = String(Math.max(0, 1 - p * 4));
+}
+
+/** 离开序章后 baseK 作废，回章时重新采样。 */
+export function resetPrologue(): void {
+  baseK = null;
 }

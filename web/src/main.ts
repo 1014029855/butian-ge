@@ -4,20 +4,25 @@ import { hitTestStar } from "./starfield/hitTest";
 import {
   buildLayout,
   renderSky,
+  reprojectLayout,
   type StarsJson,
   type AsterismsJson,
   type SkyLayout,
 } from "./starfield/renderer";
+import { project } from "./starfield/projection";
+import { MeteorShower } from "./starfield/meteors";
 import { showDetailCard, hideDetailCard } from "./ui/detailCard";
 import { enterFallback } from "./ui/fallback";
 import { detectSupport } from "./starfield/support";
 import { registerChapter, startScrollManager } from "./scroll/scrollManager";
 import { defaultView, type SkyView } from "./scroll/view";
-import { updatePrologue } from "./chapters/prologue";
+import { updatePrologue, resetPrologue } from "./chapters/prologue";
 import { initAtlasDom, updateAtlas } from "./chapters/atlas";
 import { initGnomon, updateGnomon } from "./chapters/gnomon";
 import { updateZiwei } from "./chapters/ziwei";
 import { initEastWest, updateEastWest } from "./chapters/eastwest";
+import { initGlobe, updateGlobe, leaveGlobe, tickGlobe, drawGlobeOverlay } from "./chapters/globe";
+import { initEpoch, updateEpoch, leaveEpoch, drawEpochOverlay } from "./chapters/epoch";
 
 const canvas = document.getElementById("sky") as HTMLCanvasElement;
 const card = document.getElementById("detail-card") as HTMLElement;
@@ -36,6 +41,24 @@ let starsJson: StarsJson | null = null;
 let atlasActive = false;
 let lastFrame = 0;
 let fullFit: { k: number; tx: number; ty: number } | null = null;
+
+const meteors = new MeteorShower();
+
+/** 主星图的渲染模式：平面投影 / 天球仪 / 岁差时间机 */
+type RenderMode = "flat" | "globe" | "epoch";
+let mode: RenderMode = "flat";
+
+function setChapter(id: string): void {
+  const next: RenderMode = id === "ch-globe" ? "globe" : id === "ch-epoch" ? "epoch" : "flat";
+  if (next !== mode) {
+    mode = next;
+    if (mode === "flat" && layout) reprojectLayout(layout, project);
+    lastFrame = 0;
+  }
+  if (id !== "ch-globe") leaveGlobe();
+  if (id !== "ch-epoch") leaveEpoch();
+  if (id !== "ch-prologue") resetPrologue();
+}
 
 function resize(): void {
   const dpr = window.devicePixelRatio || 1;
@@ -58,10 +81,13 @@ async function boot(): Promise<void> {
 
   initAtlasDom();
   initGnomon();
+  initGlobe(canvas, layout);
+  initEpoch(layout, () => { lastFrame = 0; });
   void initEastWest(layout, starsJson);
 
-  registerChapter("ch-prologue", (p) => updatePrologue(view, p));
+  registerChapter("ch-prologue", (p) => { setChapter("ch-prologue"); updatePrologue(view, camera, p); });
   registerChapter("ch-atlas", (p) => {
+    setChapter("ch-atlas");
     atlasActive = true;
     if (layout && fullFit && p < 0.05 && !view.freeExplore) {
       // 从紫微垣章节滚回时恢复全景
@@ -69,10 +95,12 @@ async function boot(): Promise<void> {
     }
     updateAtlas(view, layout!, camera, p);
   });
-  registerChapter("ch-gnomon", () => updateGnomon(view));
-  registerChapter("ch-ziwei", (p) => updateZiwei(view, layout!, camera, p));
-  registerChapter("ch-eastwest", () => updateEastWest(view));
-  registerChapter("ch-credits", () => {});
+  registerChapter("ch-gnomon", () => { setChapter("ch-gnomon"); updateGnomon(view); });
+  registerChapter("ch-ziwei", (p) => { setChapter("ch-ziwei"); updateZiwei(view, layout!, camera, p); });
+  registerChapter("ch-globe", () => { setChapter("ch-globe"); updateGlobe(view, camera); });
+  registerChapter("ch-epoch", () => { setChapter("ch-epoch"); updateEpoch(view, camera); });
+  registerChapter("ch-eastwest", () => { setChapter("ch-eastwest"); updateEastWest(view); });
+  registerChapter("ch-credits", () => { setChapter("ch-credits"); });
 
   startScrollManager(() => { lastFrame = 0; });
   requestAnimationFrame(tick);
@@ -80,10 +108,19 @@ async function boot(): Promise<void> {
 
 function tick(nowMs: number): void {
   requestAnimationFrame(tick);
-  if (!layout || nowMs - lastFrame < 33) return;
+  if (!layout) return;
+  const globeDirty = mode === "globe" && tickGlobe(nowMs);
+  if (!globeDirty && nowMs - lastFrame < 33) return;
   lastFrame = nowMs;
-  canvas.classList.toggle("interactive", view.freeExplore && atlasActive);
-  renderSky(ctx, camera, layout, nowMs / 1000, window.innerWidth, window.innerHeight, {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  canvas.classList.toggle("interactive", (view.freeExplore && atlasActive) || mode === "globe");
+  const globeMode = mode === "globe";
+  if (globeMode) {
+    ctx.clearRect(0, 0, W, H);
+    drawGlobeOverlay(ctx, camera, W, H);
+  }
+  renderSky(ctx, camera, layout, nowMs / 1000, W, H, {
     highlightIndices: view.highlight,
     rotation: view.rotation,
     revealAlpha: view.revealAlpha ?? undefined,
@@ -91,7 +128,11 @@ function tick(nowMs: number): void {
     visibleAsterisms: view.visible,
     labelIndices: view.labels,
     showLines: view.showLines,
+    skipClear: globeMode,
   });
+  if (mode === "epoch") drawEpochOverlay(ctx, camera, layout);
+  meteors.update(nowMs / 1000, W, H);
+  meteors.draw(ctx, nowMs / 1000);
 }
 
 /* ---------- 自由探索交互（仅星野漫游章节末段开放） ---------- */
