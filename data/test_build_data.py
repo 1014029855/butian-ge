@@ -40,8 +40,18 @@ def test_asterism_stars_exist_in_catalog():
             assert all(h in stars for h in line)
 
 
+def test_western_constellations():
+    path = os.path.join(ROOT, "web", "public", "data", "western.json")
+    cons = load(path)["constellations"]
+    assert len(cons) >= 80, f"西方星座过少: {len(cons)}"
+    stars = {s["hip"] for s in load(STARS)["stars"]}
+    for c in cons:
+        assert all(h in stars for line in c["lines"] for h in line), f"{c['name']} 缺星"
+
+
 if __name__ == "__main__":
     test_stars_count_and_ranges()
     test_asterisms_count_and_chinese_names()
     test_asterism_stars_exist_in_catalog()
+    test_western_constellations()
     print("ALL DATA TESTS PASSED")

@@ -27,6 +27,9 @@ SOURCES = {
     "star_names.zh_CN.fab": [
         "https://cdn.jsdelivr.net/gh/Stellarium/stellarium@master/skycultures/chinese/star_names.zh_CN.fab",
     ],
+    "modern_index.json": [
+        "https://cdn.jsdelivr.net/gh/Stellarium/stellarium@master/skycultures/modern/index.json",
+    ],
     "hyg_v44.csv.gz": [
         "https://codeberg.org/astronexus/hyg/media/branch/main/data/hyg/CURRENT/hyg_v44.csv.gz",
         "https://www.astronexus.com/downloads/catalogs/hygdata_v3.csv.gz",
@@ -157,6 +160,34 @@ def main() -> None:
             "lines": lines,
         })
 
+    # 西方星座（第五章"东西对话"对比用）
+    print("== 读取西方星座数据 ==")
+    modern = json.loads(fetch("modern_index.json").decode("utf-8"))
+    western = []
+    western_hips: set[int] = set()
+    for con in modern["constellations"]:
+        cid = con["id"].split()[-1]  # 如 Aql
+        cname = con.get("common_name", {})
+        lines = []
+        members: set[int] = set()
+        for poly in con.get("lines", []):
+            ids = [h for h in (as_hip(v) for v in poly) if h is not None]
+            for a, b in zip(ids, ids[1:]):
+                lines.append([a, b])
+            members.update(ids)
+        if not lines:
+            continue
+        western_hips.update(members)
+        western.append({
+            "id": cid,
+            "name": cname.get("native", cid),           # 拉丁名
+            "nameEn": cname.get("english", ""),          # 英文通名
+            "stars": sorted(members),
+            "lines": lines,
+        })
+    western_hips &= set(hyg)
+    print(f"  西方星座 {len(western)} 个")
+
     missing = sorted(h for h in used_hips if h not in hyg)
     if missing:
         print(f"  警告: {len(missing)} 个 HIP 在 HYG 中缺失: {missing[:10]}")
@@ -168,8 +199,8 @@ def main() -> None:
             a["lines"] = [seg for seg in a["lines"] if seg[0] not in miss and seg[1] not in miss]
         asterisms = [a for a in asterisms if a["lines"] and a["stars"]]
 
-    # 星点全集 = 星官成员星 ∪ 有中文星名的星 ∪ 背景亮星
-    keep: set[int] = set(used_hips) | set(star_names)
+    # 星点全集 = 星官成员星 ∪ 有中文星名的星 ∪ 西方星座成员星 ∪ 背景亮星
+    keep: set[int] = set(used_hips) | set(star_names) | western_hips
     for hip, s in hyg.items():
         if s["mag"] <= BACKGROUND_MAG_LIMIT and s["dec"] >= BACKGROUND_DEC_MIN:
             keep.add(hip)
@@ -180,15 +211,22 @@ def main() -> None:
          "mag": round(hyg[hip]["mag"], 2), "name": star_names.get(hip)}
         for hip in sorted(keep)
     ]
+    star_set = {s["hip"] for s in stars}
+    for w in western:
+        w["stars"] = [h for h in w["stars"] if h in star_set]
+        w["lines"] = [seg for seg in w["lines"] if seg[0] in star_set and seg[1] in star_set]
+    western = [w for w in western if w["lines"]]
 
     with open(os.path.join(OUT, "stars.json"), "w", encoding="utf-8") as f:
         json.dump({"stars": stars}, f, ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(OUT, "asterisms.json"), "w", encoding="utf-8") as f:
         json.dump({"asterisms": asterisms}, f, ensure_ascii=False, separators=(",", ":"))
+    with open(os.path.join(OUT, "western.json"), "w", encoding="utf-8") as f:
+        json.dump({"constellations": western}, f, ensure_ascii=False, separators=(",", ":"))
 
     named = sum(1 for s in stars if s["name"])
     print("== 汇总 ==")
-    print(f"  星官 {len(asterisms)} 个；星点 {len(stars)} 颗（其中中文星名 {named} 颗）")
+    print(f"  星官 {len(asterisms)} 个；西方星座 {len(western)} 个；星点 {len(stars)} 颗（其中中文星名 {named} 颗）")
     print(f"  输出: {OUT}")
 
 
