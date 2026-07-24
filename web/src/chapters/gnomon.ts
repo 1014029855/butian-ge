@@ -1,4 +1,5 @@
 import type { SkyView } from "../scroll/view";
+import { fallbackNote } from "../ui/fallback";
 
 /**
  * 观象授时 · 圭表测影交互。
@@ -43,7 +44,12 @@ export function initGnomon(): void {
   if (!canvas || !slider || !readout) return;
   const cv: HTMLCanvasElement = canvas;
   const rd: HTMLElement = readout;
-  const ctx = cv.getContext("2d")!;
+  const maybeCtx = cv.getContext("2d");
+  if (!maybeCtx) {
+    fallbackNote(cv, "当前浏览器无法创建绘图上下文，圭表测影演示不可用。");
+    return;
+  }
+  const ctx: CanvasRenderingContext2D = maybeCtx;
 
   function draw(day: number): void {
     const W = cv.width, H = cv.height;

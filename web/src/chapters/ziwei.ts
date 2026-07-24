@@ -51,9 +51,9 @@ export function updateZiwei(
   view.rotation = 0;
   view.showLines = true;
   view.visible = visible;
-  view.dimStarAlpha = 0.9;
+  view.dimStarAlpha = 1;
   view.freeExplore = false;
-  view.revealAlpha = (ai: number) => (visible?.has(ai) ? 0.6 : 0.08);
+  view.revealAlpha = (ai: number) => (visible?.has(ai) ? 0.75 : 0.1);
 
   if (p < 0.5) {
     const focus = idx(layout, BEIJI_SET);

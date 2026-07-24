@@ -9,6 +9,8 @@ import {
   type SkyLayout,
 } from "./starfield/renderer";
 import { showDetailCard, hideDetailCard } from "./ui/detailCard";
+import { enterFallback } from "./ui/fallback";
+import { detectSupport } from "./starfield/support";
 import { registerChapter, startScrollManager } from "./scroll/scrollManager";
 import { defaultView, type SkyView } from "./scroll/view";
 import { updatePrologue } from "./chapters/prologue";
@@ -19,7 +21,13 @@ import { initEastWest, updateEastWest } from "./chapters/eastwest";
 
 const canvas = document.getElementById("sky") as HTMLCanvasElement;
 const card = document.getElementById("detail-card") as HTMLElement;
-const ctx = canvas.getContext("2d")!;
+
+// 渲染能力检测：Canvas 2D 不可用（隐私模式/内存不足/老旧 WebView）时
+// 进入静态降级页，不再启动交互逻辑。
+const support = detectSupport();
+const ctxNull = support.canvas2d ? canvas.getContext("2d") : null;
+if (!ctxNull) enterFallback(support);
+const ctx = ctxNull!;
 
 const camera = new Camera();
 const view: SkyView = defaultView();
@@ -38,7 +46,7 @@ function resize(): void {
 
 async function boot(): Promise<void> {
   resize();
-  camera.fit(Math.PI, window.innerWidth, window.innerHeight, 48);
+  camera.coverFit(Math.PI, window.innerWidth, window.innerHeight);
   fullFit = { k: camera.k, tx: camera.tx, ty: camera.ty };
 
   const [starsRes, asterismsRes] = await Promise.all([
@@ -88,73 +96,76 @@ function tick(nowMs: number): void {
 
 /* ---------- 自由探索交互（仅星野漫游章节末段开放） ---------- */
 
-let dragging = false;
-let downX = 0;
-let downY = 0;
-let moved = 0;
+// 以下交互与渲染循环依赖 Canvas 2D 上下文，检测失败时整体跳过。
+if (ctxNull) {
+  let dragging = false;
+  let downX = 0;
+  let downY = 0;
+  let moved = 0;
 
-function interactive(): boolean {
-  return view.freeExplore && atlasActive && layout !== null;
-}
-
-canvas.addEventListener("pointerdown", (e) => {
-  if (!interactive()) return;
-  dragging = true;
-  moved = 0;
-  downX = e.clientX;
-  downY = e.clientY;
-  canvas.classList.add("dragging");
-  canvas.setPointerCapture(e.pointerId);
-});
-
-canvas.addEventListener("pointermove", (e) => {
-  if (!dragging || !interactive()) return;
-  const dx = e.clientX - downX;
-  const dy = e.clientY - downY;
-  moved += Math.abs(dx) + Math.abs(dy);
-  camera.pan(dx, dy);
-  downX = e.clientX;
-  downY = e.clientY;
-  lastFrame = 0;
-});
-
-canvas.addEventListener("pointerup", (e) => {
-  if (!dragging) return;
-  dragging = false;
-  canvas.classList.remove("dragging");
-  if (!interactive() || !layout) return;
-  if (moved < 4) {
-    const w = camera.toWorld(e.clientX, e.clientY);
-    const idx = hitTestStar(layout.stars, w.x, w.y, 10 / camera.k);
-    if (idx >= 0) {
-      const ai = layout.starAsterism.get(layout.stars[idx].hip);
-      if (ai !== undefined) {
-        view.highlight = new Set([ai]);
-        view.labels = [ai];
-        showDetailCard(card, layout.asterisms[ai], { x: e.clientX, y: e.clientY });
-        lastFrame = 0;
-        return;
-      }
-    }
-    view.highlight = null;
-    view.labels = [];
-    hideDetailCard(card);
-    lastFrame = 0;
+  function interactive(): boolean {
+    return view.freeExplore && atlasActive && layout !== null;
   }
-});
 
-canvas.addEventListener(
-  "wheel",
-  (e) => {
-    if (!interactive()) return; // 非探索态不拦截滚轮，正常滚动页面
-    e.preventDefault();
-    camera.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.001));
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!interactive()) return;
+    dragging = true;
+    moved = 0;
+    downX = e.clientX;
+    downY = e.clientY;
+    canvas.classList.add("dragging");
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!dragging || !interactive()) return;
+    const dx = e.clientX - downX;
+    const dy = e.clientY - downY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    camera.pan(dx, dy);
+    downX = e.clientX;
+    downY = e.clientY;
     lastFrame = 0;
-  },
-  { passive: false },
-);
+  });
 
-window.addEventListener("scroll", () => { atlasActive = false; }, { passive: true, capture: true });
-window.addEventListener("resize", () => { resize(); lastFrame = 0; });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!dragging) return;
+    dragging = false;
+    canvas.classList.remove("dragging");
+    if (!interactive() || !layout) return;
+    if (moved < 4) {
+      const w = camera.toWorld(e.clientX, e.clientY);
+      const idx = hitTestStar(layout.stars, w.x, w.y, 10 / camera.k);
+      if (idx >= 0) {
+        const ai = layout.starAsterism.get(layout.stars[idx].hip);
+        if (ai !== undefined) {
+          view.highlight = new Set([ai]);
+          view.labels = [ai];
+          showDetailCard(card, layout.asterisms[ai], { x: e.clientX, y: e.clientY });
+          lastFrame = 0;
+          return;
+        }
+      }
+      view.highlight = null;
+      view.labels = [];
+      hideDetailCard(card);
+      lastFrame = 0;
+    }
+  });
 
-void boot();
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      if (!interactive()) return; // 非探索态不拦截滚轮，正常滚动页面
+      e.preventDefault();
+      camera.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.001));
+      lastFrame = 0;
+    },
+    { passive: false },
+  );
+
+  window.addEventListener("scroll", () => { atlasActive = false; }, { passive: true, capture: true });
+  window.addEventListener("resize", () => { resize(); lastFrame = 0; });
+
+  void boot();
+}

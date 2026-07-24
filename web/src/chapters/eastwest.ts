@@ -1,4 +1,5 @@
 import type { SkyView } from "../scroll/view";
+import { fallbackNote } from "../ui/fallback";
 import { project } from "../starfield/projection";
 import { Camera } from "../starfield/camera";
 import type { SkyLayout, StarRecord, WesternJson } from "../starfield/renderer";
@@ -35,7 +36,12 @@ export async function initEastWest(
     }
   }
 
-  const ctx = canvas.getContext("2d")!;
+  const maybeCtx = canvas.getContext("2d");
+  if (!maybeCtx) {
+    fallbackNote(canvas, "当前浏览器无法创建绘图上下文，东西星空对比不可用。");
+    return;
+  }
+  const ctx: CanvasRenderingContext2D = maybeCtx;
   const cam = new Camera();
 
   function resize(): void {
@@ -65,9 +71,9 @@ export async function initEastWest(
     }
 
     // 西方星座线（全幅，米白）
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.6;
     ctx.strokeStyle = "#fce1b6";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     for (const seg of westSegs) {
       const p1 = cam.toScreen(seg.x1, seg.y1);
@@ -82,9 +88,11 @@ export async function initEastWest(
     ctx.beginPath();
     ctx.rect(0, 0, sx, H);
     ctx.clip();
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = 0.95;
     ctx.strokeStyle = "#c9a227";
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 1.8;
+    ctx.shadowColor = "rgba(201,162,39,0.5)";
+    ctx.shadowBlur = 6;
     ctx.beginPath();
     for (const a of layout.asterisms) {
       for (const seg of a.segments) {

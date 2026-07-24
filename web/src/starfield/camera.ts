@@ -31,4 +31,11 @@ export class Camera {
     this.tx = viewportW / (2 * this.k);
     this.ty = viewportH / (2 * this.k);
   }
+
+  /** "cover" 适配：天球铺满整个视口（宽屏两侧不留白），溢出边缘被裁掉。 */
+  coverFit(radius: number, viewportW: number, viewportH: number, bleed = 1.08): void {
+    this.k = (Math.max(viewportW, viewportH) * bleed) / (2 * radius);
+    this.tx = viewportW / (2 * this.k);
+    this.ty = viewportH / (2 * this.k);
+  }
 }

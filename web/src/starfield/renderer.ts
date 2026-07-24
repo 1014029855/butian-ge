@@ -160,7 +160,11 @@ export function renderSky(
       if (alpha <= 0.003) continue;
       ctx.strokeStyle = hot ? "#c9a227" : "#af915f";
       ctx.globalAlpha = hot ? Math.max(0.95, alpha) : alpha;
-      ctx.lineWidth = hot ? 1.6 : 1;
+      ctx.lineWidth = hot ? 2 : 1;
+      if (hot) {
+        ctx.shadowColor = "rgba(201, 162, 39, 0.7)";
+        ctx.shadowBlur = 9;
+      }
       ctx.beginPath();
       for (const seg of a.segments) {
         const w1 = rot(seg.x1, seg.y1, rotation);
@@ -171,26 +175,35 @@ export function renderSky(
         ctx.lineTo(p2.x, p2.y);
       }
       ctx.stroke();
+      ctx.shadowBlur = 0;
     }
   }
 
+  // 星点（半径整体放大 1.4 倍，亮星带光晕，加色混合更有"发光感"）
+  const R_SCALE = 1.4;
+  ctx.globalCompositeOperation = "lighter";
   for (const s of layout.stars) {
     const w = rot(s.x, s.y, rotation);
     const p = camera.toScreen(w.x, w.y);
-    if (p.x < -8 || p.y < -8 || p.x > width + 8 || p.y > height + 8) continue;
+    if (p.x < -12 || p.y < -12 || p.x > width + 12 || p.y > height + 12) continue;
     const alpha = s.baseAlpha * twinkleOpacity(s.tw, tSec) * dimStarAlpha;
     if (alpha <= 0.003) continue;
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = "#c9a227";
-    if (s.r >= 2.2) {
-      ctx.shadowColor = "rgba(201, 162, 39, 0.8)";
-      ctx.shadowBlur = 6;
+    const r = s.r * R_SCALE;
+    if (r >= 2.4) {
+      // 光晕
+      ctx.globalAlpha = alpha * 0.16;
+      ctx.fillStyle = "#e8c86a";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 2.6, 0, Math.PI * 2);
+      ctx.fill();
     }
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = r >= 2.4 ? "#f0d98c" : "#c9a227";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, s.r, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
   }
+  ctx.globalCompositeOperation = "source-over";
 
   if (labelIndices.length) {
     ctx.globalAlpha = 1;

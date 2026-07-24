@@ -8,6 +8,18 @@
   <body>
     <canvas id="sky"></canvas>
 
+    <!-- 降级页：Canvas 2D 不可用时由 JS 激活 -->
+    <div id="fallback" hidden>
+      <div class="fallback-inner">
+        <h1>步天歌</h1>
+        <p class="fallback-lead">这是一幅可以走上去的中国星空——三千年前中国人为星星命名的交互星图。</p>
+        <p>很抱歉，你当前的浏览器环境无法创建绘图上下文（Canvas 2D），交互星图无法呈现。可能原因：浏览器开启了反追踪/指纹防护、设备内存不足，或浏览器版本过旧。请换用最新版 Chrome、Edge、Firefox 或 Safari 访问。</p>
+        <p>本站内容包括：三垣四象二十八宿星官体系的动态点亮、登封观星台圭表测影模型、紫微垣天人秩序巡游，以及中国星官与西方星座的同天对比。</p>
+        <p id="fallback-diag"></p>
+        <p class="fallback-credits">数据：HYG Database v4.4 · Stellarium 中国星空文化数据 · 《步天歌》</p>
+      </div>
+    </div>
+
     <!-- 一、序章 -->
     <section id="ch-prologue" class="chapter">
       <div class="sticky">
@@ -15,6 +27,7 @@
           <h1 id="app-title">步天歌</h1>
           <p class="prologue-line">三千年前，中国人开始给星星命名。</p>
           <p class="prologue-sub">一部可以走上去的中国星空 · 交互星图</p>
+          <div class="seal prologue-seal">步</div>
         </div>
         <div id="scroll-cue">向下滚动 · 步入夜空</div>
       </div>
@@ -25,6 +38,7 @@
       <div class="sticky">
         <div class="panel-stack">
           <div class="atlas-panel active">
+            <p class="eyebrow">其贰 · 星野漫游 THE ATLAS</p>
             <h2>星野漫游</h2>
             <p>中国人的天空，是一套完整的秩序：三垣居中，四象环列，二十八宿周天而行。继续滚动，看它们一片片亮起。</p>
           </div>
@@ -50,7 +64,11 @@
       <div class="sticky">
         <div class="gnomon-layout">
           <div class="gnomon-text">
-            <h2>观象授时</h2>
+            <p class="eyebrow">其叁 · 观象授时 THE GNOMON</p>
+            <div class="chapter-head">
+              <h2>观象授时</h2>
+              <div class="seal">表</div>
+            </div>
             <p>一根八尺立杆，一条石圭刻度。古人测量正午日影的长短，定出冬至与夏至，从而定出一年的节律。</p>
             <p>影最长之日为冬至，最短之日为夏至——二十四节气，就这样从一道影子里长了出来。</p>
             <p class="gnomon-loc">模型参数：登封观星台 北纬 34.7° · 八尺之表</p>
@@ -68,7 +86,11 @@
     <section id="ch-ziwei" class="chapter">
       <div class="sticky">
         <div class="ziwei-text">
-          <h2>天人之间</h2>
+          <p class="eyebrow">其肆 · 天人之间 THE POLE STAR</p>
+          <div class="chapter-head">
+            <h2>天人之间</h2>
+            <div class="seal">极</div>
+          </div>
           <p>「譬如北辰，居其所而众星共之。」——《论语》</p>
           <p>紫微垣是天上的紫禁城。北极五星：太子、帝、庶子、后宫、天枢，帝星即当时的北极星。</p>
           <p>北斗七星是天之车驾：「斗为帝车，运于中央，临制四乡。」斗柄东指，天下皆春。</p>
@@ -80,7 +102,11 @@
     <section id="ch-eastwest" class="chapter">
       <div class="sticky">
         <div class="eastwest-head">
-          <h2>东西对话</h2>
+          <p class="eyebrow">其伍 · 东西对话 EAST MEETS WEST</p>
+          <div class="chapter-head">
+            <h2>东西对话</h2>
+            <div class="seal">会</div>
+          </div>
           <p>同一片星空，两种文明各自连线。左边是中国的星官，右边是西方的星座——拖动中线看看。</p>
         </div>
         <div id="compare-wrap">
@@ -95,7 +121,11 @@
     <!-- 六、尾声 -->
     <section id="ch-credits" class="chapter credits">
       <div class="credits-inner">
-        <h2>尾声 · 数据与出处</h2>
+        <p class="eyebrow">其陆 · 尾声 CREDITS</p>
+        <div class="chapter-head">
+          <h2>尾声 · 数据与出处</h2>
+          <div class="seal">跋</div>
+        </div>
         <ul>
           <li>恒星位置与星等：<b>HYG Database v4.4</b>（astronexus，CC BY-SA-4.0 许可）</li>
           <li>中国星官连线与星名：<b>Stellarium 项目中国星空文化数据</b>（skycultures/chinese）</li>
