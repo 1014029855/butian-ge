@@ -4,185 +4,47 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>步天歌 · 中国古代星官交互星图</title>
-    <script type="module" crossorigin src="./assets/index-DGNkGWyY.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CLaU15f-.css">
+    <script type="module" crossorigin src="./assets/main-BYPitsSP.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/detailCard-Df9QdKXr.js">
+    <link rel="stylesheet" crossorigin href="./assets/main-BmHNrSLw.css">
   </head>
   <body>
-    <canvas id="sky"></canvas>
+    <!-- 3D 天球：fixed 全屏，章节内容层之下 -->
+    <canvas id="sky-canvas"></canvas>
 
-    <!-- 降级页：Canvas 2D 不可用时由 JS 激活 -->
+    <div id="loading">星 空 加 载 中 …</div>
+
+    <!-- 降级页：WebGL 不可用时由 app.ts 激活 -->
     <div id="fallback" hidden>
       <div class="fallback-inner">
         <h1>步天歌</h1>
         <p class="fallback-lead">这是一幅可以走上去的中国星空——三千年前中国人为星星命名的交互星图。</p>
-        <p>很抱歉，你当前的浏览器环境无法创建绘图上下文（Canvas 2D），交互星图无法呈现。可能原因：浏览器开启了反追踪/指纹防护、设备内存不足，或浏览器版本过旧。请换用最新版 Chrome、Edge、Firefox 或 Safari 访问。</p>
+        <p>很抱歉，你当前的浏览器环境无法创建 WebGL 绘图上下文，交互星图无法呈现。可能原因：浏览器开启了反追踪/指纹防护、设备内存不足，或浏览器版本过旧。请换用最新版 Chrome、Edge、Firefox 或 Safari 访问。</p>
         <p>本站内容包括：三垣四象二十八宿星官体系的动态点亮、登封观星台圭表测影模型、紫微垣天人秩序巡游，以及中国星官与西方星座的同天对比。</p>
         <p id="fallback-diag"></p>
         <p class="fallback-credits">数据：HYG Database v4.4 · Stellarium 中国星空文化数据 · 《步天歌》</p>
       </div>
     </div>
 
-    <!-- 一、序章 -->
-    <section id="ch-prologue" class="chapter">
-      <div class="sticky">
-        <img id="hero-brush" src="hero-brush-cut.png" alt="" />
-        <div class="prologue-center">
-          <p class="prologue-eyebrow">卷首 · 序</p>
-          <p class="prologue-line">三千年前，<br />中国人开始给星星命名。</p>
-          <p class="prologue-sub">一部可以走上去的中国星空 · 交互星图</p>
-          <div class="seal prologue-seal">步</div>
-        </div>
-        <div id="scroll-cue">向下滚动 · 步入夜空</div>
-      </div>
-    </section>
-
-    <!-- 二、星野漫游 -->
-    <section id="ch-atlas" class="chapter">
-      <div class="sticky">
-        <div class="panel-stack">
-          <div class="atlas-panel active">
-            <p class="eyebrow">其贰 · 星野漫游 THE ATLAS</p>
-            <h2>星野漫游</h2>
-            <p>中国人的天空，是一套完整的秩序：三垣居中，四象环列，二十八宿周天而行。继续滚动，看它们一片片亮起。</p>
-          </div>
-          <div class="atlas-panel"><h2>紫微垣 · 众星拱北</h2><p>以北极为中心的天廷，天帝与后妃、文武百官皆列于此。古人相信：天的秩序，就是人的秩序。</p></div>
-          <div class="atlas-panel"><h2>太微垣 · 天子的朝堂</h2><p>五帝座居中，将相、诸侯、郎官环列——一座悬在夜空南边的金銮殿。</p></div>
-          <div class="atlas-panel"><h2>天市垣 · 天上的市集</h2><p>列肆、车肆、市楼、度量衡俱全。天上的集市如此热闹，人间的烟火才有模样。</p></div>
-          <div class="atlas-panel"><h2>东方青龙 · 春之七宿</h2><p>角亢氐房心尾箕。苍龙七宿春日东升，龙角初露，便是春耕的信号。</p></div>
-          <div class="atlas-panel"><h2>北方玄武 · 冬之七宿</h2><p>斗牛女虚危室壁。龟蛇相守的北宫，藏着牛郎织女隔河相望的千年心事。</p></div>
-          <div class="atlas-panel"><h2>西方白虎 · 秋之七宿</h2><p>奎娄胃昴毕觜参。白虎踞西，参宿三星是秋夜最容易辨认的路标。</p></div>
-          <div class="atlas-panel"><h2>南方朱雀 · 夏之七宿</h2><p>井鬼柳星张翼轸。朱雀展翅于夏夜南天，曾是多少旅人的方向。</p></div>
-          <div class="atlas-panel">
-            <h2>现在，把星空交给你</h2>
-            <p>拖拽平移，滚轮缩放，点击任意一颗星，查看它所属的星官。</p>
-          </div>
-        </div>
-        <div id="explore-hint">拖拽平移 · 滚轮缩放 · 点击星点查看星官</div>
-        <div id="detail-card" hidden></div>
-      </div>
-    </section>
-
-    <!-- 三、观象授时 -->
-    <section id="ch-gnomon" class="chapter">
-      <div class="sticky">
-        <div class="gnomon-layout">
-          <div class="gnomon-text">
-            <p class="eyebrow">其叁 · 观象授时 THE GNOMON</p>
-            <div class="chapter-head">
-              <h2>观象授时</h2>
-              <div class="seal">表</div>
-            </div>
-            <p>一根八尺立杆，一条石圭刻度。古人测量正午日影的长短，定出冬至与夏至，从而定出一年的节律。</p>
-            <p>影最长之日为冬至，最短之日为夏至——二十四节气，就这样从一道影子里长了出来。</p>
-            <p class="gnomon-loc">模型参数：登封观星台 北纬 34.7° · 八尺之表</p>
-          </div>
-          <div class="gnomon-widget">
-            <canvas id="gnomon-canvas" width="720" height="400"></canvas>
-            <input id="gnomon-slider" type="range" min="1" max="365" value="80" />
-            <p id="gnomon-readout"></p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 四、天人之间 -->
-    <section id="ch-ziwei" class="chapter">
-      <div class="sticky">
-        <div class="ziwei-text">
-          <p class="eyebrow">其肆 · 天人之间 THE POLE STAR</p>
-          <div class="chapter-head">
-            <h2>天人之间</h2>
-            <div class="seal">极</div>
-          </div>
-          <p>「譬如北辰，居其所而众星共之。」——《论语》</p>
-          <p>紫微垣是天上的紫禁城。北极五星：太子、帝、庶子、后宫、天枢，帝星即当时的北极星。</p>
-          <p>北斗七星是天之车驾：「斗为帝车，运于中央，临制四乡。」斗柄东指，天下皆春。</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 五、揽星为球 -->
-    <section id="ch-globe" class="chapter">
-      <div class="sticky">
-        <div class="globe-text">
-          <p class="eyebrow">其伍 · 揽星为球 THE CELESTIAL SPHERE</p>
-          <div class="chapter-head">
-            <h2>揽星为球</h2>
-            <div class="seal">球</div>
-          </div>
-          <p>「浑天如鸡子，天体圆如弹丸。」——张衡《浑天仪注》</p>
-          <p>平面的星图只是天球的一次摊平。现在把它团回一颗球——用你的手，转动整片中国星空。</p>
-          <p class="globe-hint">按住星空拖拽 · 松手惯性滑行 · 静下来它自己会转</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 六、一万年 -->
-    <section id="ch-epoch" class="chapter">
-      <div class="sticky">
-        <div class="epoch-text">
-          <p class="eyebrow">其陆 · 一万年 PRECESSION</p>
-          <div class="chapter-head">
-            <h2>一万年</h2>
-            <div class="seal">岁</div>
-          </div>
-          <p>地轴是一根慢慢摇晃的陀螺，两万六千年转完一圈。天极在星间漂移，"北极星"于是有了朝代。</p>
-          <p>周公看见的北极星，不是你的北极星。拖动时间，看一万七千年的星空变迁。</p>
-        </div>
-        <div class="epoch-console">
-          <div id="epoch-year">公元 2026 年</div>
-          <div id="epoch-era">勾陈一 · 今日北极星</div>
-          <button id="epoch-play" type="button">▶ 播放一万七千年</button>
-          <input id="epoch-slider" type="range" min="-3000" max="14000" value="2026" step="10" />
-          <div class="epoch-ticks">
-            <span>前 3000 · 右枢</span>
-            <span>今 · 勾陈一</span>
-            <span>14000 · 织女一</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 七、东西对话 -->
-    <section id="ch-eastwest" class="chapter">
-      <div class="sticky">
-        <div class="eastwest-head">
-          <p class="eyebrow">其柒 · 东西对话 EAST MEETS WEST</p>
-          <div class="chapter-head">
-            <h2>东西对话</h2>
-            <div class="seal">会</div>
-          </div>
-          <p>同一片星空，两种文明各自连线。左边是中国的星官，右边是西方的星座——拖动中线看看。</p>
-        </div>
-        <div id="compare-wrap">
-          <canvas id="compare-canvas"></canvas>
-          <div id="compare-bar"><span class="compare-knob">⟷</span></div>
-          <span class="compare-label left">中国星官</span>
-          <span class="compare-label right">西方星座</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 八、尾声 -->
-    <section id="ch-credits" class="chapter credits">
-      <div class="credits-inner">
-        <p class="eyebrow">其捌 · 尾声 CREDITS</p>
-        <div class="chapter-head">
-          <h2>尾声 · 数据与出处</h2>
-          <div class="seal">跋</div>
-        </div>
-        <ul>
-          <li>恒星位置与星等：<b>HYG Database v4.4</b>（astronexus，CC BY-SA-4.0 许可）</li>
-          <li>中国星官连线与星名：<b>Stellarium 项目中国星空文化数据</b>（skycultures/chinese）</li>
-          <li>西方星座连线：<b>Stellarium 项目现代星座数据</b>（skycultures/modern）</li>
-          <li>星官体系文本：《步天歌》（丹元子，公有领域）</li>
-          <li>序章主视觉：AI 生成墨书「步天歌」巨幅书法（星尘笔意，已按规范标注）</li>
-          <li>圭表模型：登封观星台（北纬 34.7°）八尺之表，太阳赤纬 Cooper 近似</li>
-          <li>制图方法：北天极方位等距投影，与苏州石刻天文图同法</li>
-        </ul>
-        <p class="credits-note">本作品为中国大学生计算机设计大赛参赛作品 · 信息可视化设计类</p>
-      </div>
-    </section>
+    <!-- 八章滚动叙事：每章一个 100vh sticky pin 容器，章内 DOM 由章节模块自建 -->
+    <main id="chapters">
+      <!-- 一、序章 -->
+      <section id="ch1" class="chapter"><div class="pin"></div></section>
+      <!-- 二、星野漫游 -->
+      <section id="ch2" class="chapter"><div class="pin"></div></section>
+      <!-- 三、观象授时 -->
+      <section id="ch3" class="chapter"><div class="pin"></div></section>
+      <!-- 四、天人之间 -->
+      <section id="ch4" class="chapter"><div class="pin"></div></section>
+      <!-- 五、揽星为球 -->
+      <section id="ch5" class="chapter"><div class="pin"></div></section>
+      <!-- 六、一万年 -->
+      <section id="ch6" class="chapter"><div class="pin"></div></section>
+      <!-- 七、东西对话 -->
+      <section id="ch7" class="chapter"><div class="pin"></div></section>
+      <!-- 八、尾声 -->
+      <section id="ch8" class="chapter"><div class="pin"></div></section>
+    </main>
 
   </body>
 </html>
