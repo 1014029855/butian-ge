@@ -57,6 +57,7 @@ import { gazeQuat } from "../CameraRig";
 import { CH4_STOPS } from "../copy";
 import { radecToVec3 } from "../../sky3d/coords";
 import { worldToScreen } from "../../sky3d/hitTest";
+import { dataUrl } from "../../sky3d/dataUrl";
 
 // ---------------------------------------------------------------- 纯逻辑（导出供单测）
 
@@ -433,8 +434,8 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   // stopAnchors[stopIdx][labelIdx] = 天球面世界坐标（未含绕极转角）；解算失败/数据未到为 null
   let stopAnchors: (THREE.Vector3 | null)[][] | null = null;
   Promise.all([
-    fetch("/data/stars.json").then((r) => (r.ok ? (r.json() as Promise<StarsJson>) : null)),
-    fetch("/data/asterisms.json").then((r) => (r.ok ? (r.json() as Promise<AsterismsJson>) : null)),
+    fetch(dataUrl("data/stars.json")).then((r) => (r.ok ? (r.json() as Promise<StarsJson>) : null)),
+    fetch(dataUrl("data/asterisms.json")).then((r) => (r.ok ? (r.json() as Promise<AsterismsJson>) : null)),
   ])
     .then(([starsData, astData]) => {
       if (!starsData || !astData) return;

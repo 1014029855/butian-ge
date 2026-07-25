@@ -33,6 +33,7 @@
  */
 import * as THREE from "three";
 import { radecToVec3 } from "./coords";
+import { dataUrl } from "./dataUrl";
 import {
   loadStarField,
   distBoost,
@@ -333,11 +334,11 @@ renderer.setAnimationLoop(() => {
 
 Promise.all([
   loadStarField(R),
-  fetch("/data/stars.json").then((r) => {
+  fetch(dataUrl("data/stars.json")).then((r) => {
     if (!r.ok) throw new Error(`stars=${r.status}`);
     return r.json() as Promise<{ stars: DemoStarRec[] }>;
   }),
-  fetch("/data/asterisms.json").then((r) => {
+  fetch(dataUrl("data/asterisms.json")).then((r) => {
     if (!r.ok) throw new Error(`asterisms=${r.status}`);
     return r.json() as Promise<{ asterisms: AsterismRec[] }>;
   }),

@@ -21,6 +21,7 @@
  */
 import * as THREE from "three";
 import { radecToVec3, precessionMat3 } from "../sky3d/coords";
+import { dataUrl } from "../sky3d/dataUrl";
 import {
   loadStarField,
   distBoost,
@@ -251,15 +252,15 @@ export class SkyApp {
   async init(): Promise<void> {
     const [field, starsData, astData, poemData] = await Promise.all([
       loadStarField(R),
-      fetch("/data/stars.json").then((r) => {
+      fetch(dataUrl("data/stars.json")).then((r) => {
         if (!r.ok) throw new Error(`stars=${r.status}`);
         return r.json() as Promise<{ stars: StarRec[] }>;
       }),
-      fetch("/data/asterisms.json").then((r) => {
+      fetch(dataUrl("data/asterisms.json")).then((r) => {
         if (!r.ok) throw new Error(`asterisms=${r.status}`);
         return r.json() as Promise<{ asterisms: AsterismRec[] }>;
       }),
-      fetch("/data/poem.json").then((r) => {
+      fetch(dataUrl("data/poem.json")).then((r) => {
         if (!r.ok) throw new Error(`poem=${r.status}`);
         return r.json() as Promise<PoemMap>;
       }),

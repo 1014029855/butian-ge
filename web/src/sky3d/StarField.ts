@@ -5,6 +5,7 @@
  */
 import * as THREE from "three";
 import { radecToVec3 } from "./coords";
+import { dataUrl } from "./dataUrl";
 import {
   buildConstellationLines,
   type AsterismRec,
@@ -287,8 +288,8 @@ export function buildHipToAsterismMap(
 /** 拉取 stars.json / asterisms.json，构建整个天球场景组（半径 R）。 */
 export async function loadStarField(R: number): Promise<StarField> {
   const [starsRes, astRes] = await Promise.all([
-    fetch("/data/stars.json"),
-    fetch("/data/asterisms.json"),
+    fetch(dataUrl("data/stars.json")),
+    fetch(dataUrl("data/asterisms.json")),
   ]);
   if (!starsRes.ok || !astRes.ok) {
     throw new Error(`数据加载失败：stars=${starsRes.status} asterisms=${astRes.status}`);

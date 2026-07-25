@@ -57,6 +57,7 @@ import type { Chapter, ChapterCtx } from "../chapters";
 import { gazeQuat } from "../CameraRig";
 import { CH2_QUESTS } from "../copy";
 import { radecToVec3 } from "../../sky3d/coords";
+import { dataUrl } from "../../sky3d/dataUrl";
 import type { PickPayload } from "../SkyApp";
 
 // ---------------------------------------------------------------- 纯逻辑（导出供单测）
@@ -420,7 +421,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     from: string;
   }
   let poem: Record<string, PoemEntry> | null = null;
-  fetch("/data/poem.json")
+  fetch(dataUrl("data/poem.json"))
     .then((r) => (r.ok ? (r.json() as Promise<Record<string, PoemEntry>>) : null))
     .then((j) => {
       poem = j;

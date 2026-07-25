@@ -12,6 +12,7 @@
  */
 import * as THREE from "three";
 import { radecToVec3 } from "../../sky3d/coords";
+import { dataUrl } from "../../sky3d/dataUrl";
 
 /** 天球半径（与 SkyApp.R / StarField 一致） */
 const R = 100;
@@ -50,7 +51,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 /** 拉取数据并构建西方星座连线；失败时异常上抛给调用方（ch7 降级为仅告警） */
 export async function createWesternLines(): Promise<WesternLinesHandle> {
   const [western, starsData] = await Promise.all([
-    fetchJson<{ constellations: WesternConstellation[] }>("/data/western.json"),
+    fetchJson<{ constellations: WesternConstellation[] }>(dataUrl("data/western.json")),
     fetchJson<{ stars: StarRec[] }>("/data/stars.json"),
   ]);
 
