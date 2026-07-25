@@ -52,7 +52,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 export async function createWesternLines(): Promise<WesternLinesHandle> {
   const [western, starsData] = await Promise.all([
     fetchJson<{ constellations: WesternConstellation[] }>(dataUrl("data/western.json")),
-    fetchJson<{ stars: StarRec[] }>("/data/stars.json"),
+    fetchJson<{ stars: StarRec[] }>(dataUrl("data/stars.json")),
   ]);
 
   // hip → R=100 天球面坐标
