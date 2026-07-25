@@ -60,7 +60,7 @@ def fetch(name: str) -> bytes:
 
 
 def load_hyg() -> dict[int, dict]:
-    """HIP -> {ra(deg), dec(deg), mag}。兼容 gzip 与纯文本 CSV。"""
+    """HIP -> {ra(deg), dec(deg), mag, ci(B-V 色指数, 缺失为 None)}。兼容 gzip 与纯文本 CSV。"""
     raw = fetch("hyg_v44.csv.gz")
     if raw[:2] == b"\x1f\x8b":
         raw = gzip.decompress(raw)
@@ -75,10 +75,22 @@ def load_hyg() -> dict[int, dict]:
                 "ra": float(row["ra"]) * 15.0,  # 小时 → 度
                 "dec": float(row["dec"]),
                 "mag": float(row["mag"]),
+                "ci": parse_ci(row.get("ci")),
             }
         except (ValueError, KeyError):
             continue
     return stars
+
+
+def parse_ci(v) -> float | None:
+    """B-V 色指数；空串或非法值返回 None（不影响该星其余字段的取舍）。"""
+    s = (v or "").strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
 
 
 def parse_fab_star_names(raw: str) -> dict[int, str]:
@@ -208,7 +220,9 @@ def main() -> None:
 
     stars = [
         {"hip": hip, "ra": round(hyg[hip]["ra"], 5), "dec": round(hyg[hip]["dec"], 5),
-         "mag": round(hyg[hip]["mag"], 2), "name": star_names.get(hip)}
+         "mag": round(hyg[hip]["mag"], 2),
+         "ci": round(hyg[hip]["ci"], 2) if hyg[hip]["ci"] is not None else None,
+         "name": star_names.get(hip)}
         for hip in sorted(keep)
     ]
     star_set = {s["hip"] for s in stars}

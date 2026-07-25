@@ -1,3 +1,6 @@
 data/raw/
+data/.venv/
+data/font_src/
+data/__pycache__/
 node_modules/
 dist/

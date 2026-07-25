@@ -1,0 +1,300 @@
+/**
+ * 「步天歌」正式站全局样式（P2 骨架）。
+ * 设计 token 沿用旧站：墨蓝金、朱砂印、eyebrow 宽字距、宋体标题 + 黑体正文。
+ * 布局：星空 canvas fixed 全屏 + 章节内容层（CSS sticky pin，ScrollTrigger 驱动）。
+ * 不 import 旧 style.css（旧站样式随旧入口一并废弃）。
+ */
+
+/* ---- 思源宋体子集 webfont（SIL OFL 1.1，由 data/subset_font.py 生成） ---- */
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("/fonts/NotoSerifSC-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Serif SC";
+  src: url("/fonts/NotoSerifSC-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg-deep: #162638;
+  --bg-near-black: #0d0d11;
+  --gold: #c9a227;
+  --gold-dim: #af915f;
+  --cream: #fce1b6;
+  --font-display: "Noto Serif SC", "STSong", "SimSun", "Songti SC", serif;
+  --font-body: "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ease-sig: cubic-bezier(0.8, 0, 0.55, 0.94);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: auto; }
+body {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 38%, rgba(44, 70, 106, 0.5) 0%, transparent 62%),
+    radial-gradient(ellipse 120% 60% at 50% 108%, rgba(201, 162, 39, 0.07) 0%, transparent 55%),
+    linear-gradient(180deg, #16273c 0%, #0d0d11 100%);
+  color: var(--cream);
+  font-family: var(--font-body);
+}
+
+/* 影院渐晕：四周压暗，视线聚向天区中央 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 108% 96% at 50% 46%,
+    transparent 52%,
+    rgba(5, 7, 13, 0.38) 82%,
+    rgba(5, 7, 13, 0.62) 100%
+  );
+}
+
+/* 纸墨颗粒：古籍拓片质感（自旧站 style.css 迁移并细化——三倍频程细节更密、
+   去色噪成单色颗粒、stitchTiles 无缝平铺、存在感由 0.05 压至 0.04） */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 300px 300px;
+}
+
+/* ---- 星空画布：fixed 全屏，章节内容层之下 ---- */
+#sky-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  z-index: 0;
+  touch-action: none;
+  /* 系统箭头交给定制星光金环（cursor.ts）；控件上自动恢复原生光标 */
+  cursor: none;
+}
+
+/* ---- 悬停星名提示条（SkyApp 挂 body 下，仅星图章显示） ---- */
+.sky-tooltip {
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  font-family: var(--font-display, "STSong", "SimSun", serif);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: #f2dd9a;
+  background: rgba(13, 13, 17, 0.82);
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  border-radius: 3px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(201, 162, 39, 0.5);
+}
+
+/* ---- 加载中 ---- */
+#loading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 星点标签（.sky-label 的注入样式在 sky3d/Labels.ts，硬编码系统宋体栈；
+   其 <style> 运行时挂在 head 尾部、同优先级会后发覆盖，故此处以 div 元素
+   选择器提高优先级，让标签同样吃到 webfont） */
+div.sky-label { font-family: var(--font-display); }
+
+/* ---- 章节骨架：100vh sticky pin 容器，高度即叙事行程 ---- */
+.chapter { position: relative; z-index: 2; pointer-events: none; }
+.chapter .pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+#ch1 { height: 250vh; }
+#ch2 { height: 900vh; } /* 星野漫游：七组点亮 + 自由探索，宜长 */
+#ch3 { height: 220vh; }
+#ch4 { height: 300vh; }
+#ch5 { height: 320vh; }
+#ch6 { height: 260vh; }
+#ch7 { height: 260vh; }
+#ch8 { height: 160vh; }
+
+/* ---- 章节文案面板（占位章通用） ---- */
+.chapter-panel {
+  position: absolute;
+  max-width: 420px;
+  background: rgba(13, 13, 17, 0.72);
+  border: 1px solid rgba(175, 145, 95, 0.28);
+  border-radius: 10px;
+  padding: 22px 24px;
+  backdrop-filter: blur(4px);
+}
+.chapter-panel--left { left: 6vw; bottom: 10vh; }
+.chapter-panel--right { right: 6vw; bottom: 10vh; }
+.chapter-panel--center {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.chapter-panel h2 {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+.chapter-panel p { font-size: 15px; line-height: 2; opacity: 0.88; }
+.chapter-panel .hook { margin-bottom: 6px; }
+
+/* ---- 眉题与朱砂印 ---- */
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  color: var(--cream);
+  opacity: 0.55;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+.chapter-head { display: flex; align-items: flex-start; gap: 14px; }
+.chapter-panel--center .chapter-head { justify-content: center; }
+.seal {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  background: linear-gradient(150deg, #b1402f 0%, #8e2f22 100%);
+  color: #f6e8d8;
+  font-family: var(--font-display);
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(142, 47, 34, 0.45), inset 0 0 6px rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+
+/* 描金双细线：沿用外侧 1px 金框，内侧再压一道 1px hairline（伪元素，不占布局） */
+.chapter-panel::before,
+.atlas-panel::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  border-radius: 7px;
+  pointer-events: none;
+}
+
+/* ---- 章节入场：.inview 渐入（占位章通用） ---- */
+.chapter-panel { opacity: 0; transform: translateY(26px); transition: opacity 0.9s var(--ease-sig), transform 0.9s var(--ease-sig); }
+.chapter-panel--center { transform: translate(-50%, -50%) translateY(26px); }
+.chapter.inview .chapter-panel { opacity: 1; transform: translateY(0); }
+.chapter.inview .chapter-panel--center { transform: translate(-50%, -50%); }
+
+/* ---- ch2 星野漫游：面板栈 + 提示 ---- */
+.atlas-stack {
+  position: absolute;
+  right: 5vw;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(400px, 38vw);
+}
+.atlas-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  transform: translateY(calc(-50% + 16px));
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-sig), transform 0.6s var(--ease-sig);
+  background: rgba(13, 13, 17, 0.72);
+  border: 1px solid rgba(175, 145, 95, 0.28);
+  border-radius: 10px;
+  padding: 22px 24px;
+  backdrop-filter: blur(4px);
+}
+.atlas-panel.active { opacity: 1; transform: translateY(-50%); }
+.atlas-panel h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+.atlas-panel p { font-size: 14px; line-height: 2; opacity: 0.88; }
+.atlas-hint {
+  position: absolute;
+  bottom: 26px;
+  right: 5vw;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.atlas-hint.on { opacity: 0.75; }
+
+/* ---- 降级页（WebGL 不可用时由 app.ts 激活） ---- */
+#fallback {
+  position: relative;
+  z-index: 30;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 90% at 50% 0%, var(--bg-deep) 0%, var(--bg-near-black) 70%);
+}
+#fallback[hidden] { display: none; }
+.fallback-inner {
+  max-width: 620px;
+  padding: 8vh 28px;
+  color: var(--cream);
+  font-family: var(--font-body);
+  line-height: 2;
+}
+.fallback-inner h1 {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+  margin-bottom: 18px;
+}
+.fallback-lead { font-size: 17px; margin-bottom: 16px; }
+.fallback-inner p { font-size: 14px; opacity: 0.85; margin-bottom: 12px; }
+#fallback-diag {
+  margin-top: 22px;
+  padding: 10px 14px;
+  border: 1px solid rgba(175, 145, 95, 0.4);
+  border-radius: 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.fallback-credits { margin-top: 18px; font-size: 12px; opacity: 0.5; letter-spacing: 0.1em; }
+
+@media (max-width: 860px) {
+  .chapter-panel { left: 5vw; right: 5vw; max-width: none; }
+  .chapter-panel--center { left: 50%; right: auto; width: 86vw; }
+  .atlas-stack { width: 78vw; right: 6vw; }
+}

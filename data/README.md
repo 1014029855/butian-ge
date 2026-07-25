@@ -1,6 +1,6 @@
 # 数据来源与许可
 
-本目录管线产出 `web/public/data/stars.json` 与 `web/public/data/asterisms.json`。
+本目录管线产出 `web/public/data/stars.json`、`web/public/data/asterisms.json` 与 `web/public/data/western.json`（88 个西方星座连线，数据来源同 HYG/Stellarium，供东西对比章使用）。
 
 ## 数据源
 

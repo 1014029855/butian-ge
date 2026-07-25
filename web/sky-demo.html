@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>步天歌 · 天球穿越 POC</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: linear-gradient(160deg, #0d0d11 0%, #101826 55%, #162638 100%);
+        color: #cfd6e4;
+        font-family: "Noto Serif SC", "Songti SC", serif;
+      }
+      /* 滚动驱动：400vh 的滚动行程 */
+      #scroll-space {
+        height: 400vh;
+      }
+      #sky-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        touch-action: none;
+        cursor: grab;
+      }
+      #sky-canvas.dragging {
+        cursor: grabbing;
+      }
+      .hud {
+        position: fixed;
+        left: 18px;
+        bottom: 16px;
+        z-index: 10;
+        pointer-events: none;
+        user-select: none;
+      }
+      .hud .title {
+        font-size: 12px;
+        letter-spacing: 0.18em;
+        opacity: 0.62;
+      }
+      .hud .phase {
+        margin-top: 6px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        opacity: 0.38;
+      }
+      #loading {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        font-size: 13px;
+        letter-spacing: 0.3em;
+        opacity: 0.5;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="scroll-space"></div>
+    <canvas id="sky-canvas"></canvas>
+    <div id="loading">星 空 加 载 中 …</div>
+    <div class="hud">
+      <div class="title">POC：滚动穿越天球 · 拖拽环视/旋转</div>
+      <div class="phase" id="phase"></div>
+    </div>
+    <script type="module" src="/src/sky3d/demo.ts"></script>
+  </body>
+</html>
