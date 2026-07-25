@@ -11,7 +11,6 @@ import {
 } from "./starfield/renderer";
 import { project } from "./starfield/projection";
 import { MeteorShower } from "./starfield/meteors";
-import { showDetailCard, hideDetailCard } from "./ui/detailCard";
 import { enterFallback } from "./ui/fallback";
 import { initCursor } from "./ui/cursor";
 import { detectSupport } from "./starfield/support";
@@ -24,6 +23,15 @@ import { updateZiwei } from "./chapters/ziwei";
 import { initEastWest, updateEastWest } from "./chapters/eastwest";
 import { initGlobe, updateGlobe, leaveGlobe, tickGlobe, drawGlobeOverlay } from "./chapters/globe";
 import { initEpoch, updateEpoch, leaveEpoch, drawEpochOverlay, tickEpoch } from "./chapters/epoch";
+import {
+  initFocus,
+  enterFocus,
+  exitFocus,
+  focusActive,
+  tickFocus,
+  applyFocusView,
+  drawFocusOverlay,
+} from "./chapters/focus";
 
 const canvas = document.getElementById("sky") as HTMLCanvasElement;
 const card = document.getElementById("detail-card") as HTMLElement;
@@ -48,34 +56,10 @@ const meteors = new MeteorShower();
 /** 主星图的渲染模式：平面投影 / 天球仪 / 岁差时间机 */
 type RenderMode = "flat" | "globe" | "epoch";
 let mode: RenderMode = "flat";
-
-/* ---- 章节切换 concealer 墨刃横扫 ---- */
-const wipeEl = document.getElementById("wipe") as HTMLElement;
-let lastWipeAt = -1e9;
-
-function fireWipe(): void {
-  const now = performance.now();
-  if (now - lastWipeAt < 1500) return;
-  lastWipeAt = now;
-  wipeEl.classList.remove("reset");
-  void wipeEl.offsetWidth; // 强制 reflow，让 reset 位置生效
-  wipeEl.classList.add("go");
-  window.setTimeout(() => {
-    wipeEl.classList.remove("go");
-    wipeEl.classList.add("reset");
-  }, 1250);
-}
-
-/* ---- 引力透镜光标位置（屏幕坐标） ---- */
-const lens = { x: -1e4, y: -1e4 };
 let currentChapterId = "";
 
 function setChapter(id: string): void {
-  if (id !== currentChapterId) {
-    // 首次（序章开场）不扫；之后每次换章墨刃横扫
-    if (currentChapterId !== "") fireWipe();
-    currentChapterId = id;
-  }
+  currentChapterId = id;
   const next: RenderMode = id === "ch-globe" ? "globe" : id === "ch-epoch" ? "epoch" : "flat";
   if (next !== mode) {
     mode = next;
@@ -86,6 +70,8 @@ function setChapter(id: string): void {
   if (id !== "ch-globe") leaveGlobe();
   if (id !== "ch-epoch") leaveEpoch();
   if (id !== "ch-prologue") resetPrologue();
+  // 聚焦态在换章时退出
+  if (focusActive()) exitFocus(performance.now());
   // 章节文字入场动画
   document.querySelectorAll(".chapter").forEach((el) => el.classList.remove("inview"));
   document.getElementById(id)?.classList.add("inview");
@@ -115,10 +101,13 @@ async function boot(): Promise<void> {
   initGlobe(canvas, layout, camera, view, card);
   initEpoch(layout, () => { lastFrame = 0; });
   void initEastWest(layout, starsJson);
+  initFocus(layout, () => {
+    // 聚焦退出完成后，让滚动管理器重推一次视图状态
+    window.dispatchEvent(new Event("scroll"));
+  });
 
-  registerChapter("ch-prologue", (p) => { setChapter("ch-prologue"); updatePrologue(view, camera, p); });
+  registerChapter("ch-prologue", (p) => { updatePrologue(view, camera, p); });
   registerChapter("ch-atlas", (p) => {
-    setChapter("ch-atlas");
     atlasActive = true;
     if (layout && fullFit && p < 0.05 && !view.freeExplore) {
       // 从紫微垣章节滚回时恢复全景
@@ -126,14 +115,17 @@ async function boot(): Promise<void> {
     }
     updateAtlas(view, layout!, camera, p);
   });
-  registerChapter("ch-gnomon", () => { setChapter("ch-gnomon"); updateGnomon(view); });
-  registerChapter("ch-ziwei", (p) => { setChapter("ch-ziwei"); updateZiwei(view, layout!, camera, p); });
-  registerChapter("ch-globe", () => { setChapter("ch-globe"); updateGlobe(view, camera); });
-  registerChapter("ch-epoch", () => { setChapter("ch-epoch"); updateEpoch(view, camera); });
-  registerChapter("ch-eastwest", () => { setChapter("ch-eastwest"); updateEastWest(view); });
-  registerChapter("ch-credits", () => { setChapter("ch-credits"); });
+  registerChapter("ch-gnomon", () => { updateGnomon(view); });
+  registerChapter("ch-ziwei", (p) => { updateZiwei(view, layout!, camera, p); });
+  registerChapter("ch-globe", () => { updateGlobe(view, camera); });
+  registerChapter("ch-epoch", () => { updateEpoch(view, camera); });
+  registerChapter("ch-eastwest", () => { updateEastWest(view); });
+  registerChapter("ch-credits", () => { /* 尾声：静态章节 */ });
 
-  startScrollManager(() => { lastFrame = 0; });
+  startScrollManager(
+    () => { lastFrame = 0; },
+    (id) => { setChapter(id); },
+  );
   requestAnimationFrame(tick);
 }
 
@@ -145,7 +137,9 @@ function tick(nowMs: number): void {
   if (morphing && nowMs - layout.morph!.t0 >= layout.morph!.dur) layout.morph = null;
   const globeDirty = mode === "globe" && tickGlobe(nowMs);
   const epochDirty = mode === "epoch" && tickEpoch(nowMs);
-  if (!globeDirty && !epochDirty && !morphing && nowMs - lastFrame < 33) return;
+  const focusDirty = tickFocus(camera, nowMs);
+  if (focusActive()) applyFocusView(view, nowMs);
+  if (!globeDirty && !epochDirty && !focusDirty && !morphing && nowMs - lastFrame < 33) return;
   lastFrame = nowMs;
   const W = window.innerWidth;
   const H = window.innerHeight;
@@ -164,9 +158,9 @@ function tick(nowMs: number): void {
     labelIndices: view.labels,
     showLines: view.showLines,
     skipClear: globeMode,
-    lens: globeMode ? null : lens,
   });
   if (mode === "epoch") drawEpochOverlay(ctx, camera, layout);
+  drawFocusOverlay(ctx, camera, layout, nowMs, view.rotation);
   meteors.update(nowMs / 1000, W, H);
   meteors.draw(ctx, nowMs / 1000);
 }
@@ -181,7 +175,7 @@ if (ctxNull) {
   let moved = 0;
 
   function interactive(): boolean {
-    return view.freeExplore && atlasActive && layout !== null;
+    return view.freeExplore && atlasActive && layout !== null && !focusActive();
   }
 
   canvas.addEventListener("pointerdown", (e) => {
@@ -206,10 +200,16 @@ if (ctxNull) {
   });
 
   canvas.addEventListener("pointerup", (e) => {
-    if (!dragging) return;
+    if (!dragging && !focusActive()) return;
     dragging = false;
     canvas.classList.remove("dragging");
-    if (!interactive() || !layout) return;
+    if (!layout) return;
+    // 聚焦态下轻击：返回星野（聚焦中不响应拖拽，pointerdown 未启动）
+    if (focusActive()) {
+      exitFocus(performance.now());
+      return;
+    }
+    if (!interactive()) return;
     if (moved < 4) {
       const w = camera.toWorld(e.clientX, e.clientY);
       const idx = hitTestStar(
@@ -219,16 +219,14 @@ if (ctxNull) {
       if (idx >= 0) {
         const ai = layout.starAsterism.get(layout.stars[idx].hip);
         if (ai !== undefined) {
-          view.highlight = new Set([ai]);
-          view.labels = [ai];
-          showDetailCard(card, layout.asterisms[ai], { x: e.clientX, y: e.clientY });
+          // 步入星官：相机飞入，成员星逐一点名
+          enterFocus(ai, view, camera, performance.now());
           lastFrame = 0;
           return;
         }
       }
       view.highlight = null;
       view.labels = [];
-      hideDetailCard(card);
       lastFrame = 0;
     }
   });
@@ -244,21 +242,20 @@ if (ctxNull) {
     { passive: false },
   );
 
-  window.addEventListener("scroll", () => { atlasActive = false; }, { passive: true, capture: true });
+  window.addEventListener("scroll", () => {
+    atlasActive = false;
+    if (focusActive()) exitFocus(performance.now());
+  }, { passive: true, capture: true });
   window.addEventListener("resize", () => { resize(); lastFrame = 0; });
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      lens.x = e.clientX;
-      lens.y = e.clientY;
-    },
-    { passive: true },
-  );
-  document.documentElement.addEventListener("pointerleave", () => {
-    lens.x = -1e4;
-    lens.y = -1e4;
-  });
 
   initCursor();
+  // dev 调试钩子：测试脚本用来精确定位星点
+  if (import.meta.env.DEV) {
+    (window as unknown as { __btg: unknown }).__btg = {
+      get layout() { return layout; },
+      camera,
+      view,
+    };
+  }
   void boot();
 }

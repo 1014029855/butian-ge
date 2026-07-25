@@ -482,40 +482,21 @@ body::after {
    ============================================================ */
 :root { --ease-sig: cubic-bezier(0.8, 0, 0.55, 0.94); }
 
-/* ---- 章节切换 concealer：双层墨刃横扫全屏 ---- */
-#wipe {
+/* ---- 影院渐晕：四周压暗，视线聚向天区中央 ---- */
+body::before {
+  content: "";
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 1;
   pointer-events: none;
-  overflow: hidden;
-}
-.wipe-panel {
-  position: absolute;
-  top: -3vh;
-  bottom: -3vh;
-  left: 0;
-  width: 64vw;
-  background: linear-gradient(
-    100deg,
-    rgba(10, 12, 18, 0) 0%,
-    #0a0c12 14%,
-    #0a0c12 86%,
-    rgba(201, 162, 39, 0.4) 99%
+  background: radial-gradient(
+    ellipse 108% 96% at 50% 46%,
+    transparent 52%,
+    rgba(5, 7, 13, 0.38) 82%,
+    rgba(5, 7, 13, 0.62) 100%
   );
-  transform: translateX(-72vw) skewX(-6deg);
-  will-change: transform;
 }
-.wipe-panel:nth-child(2) { opacity: 0.8; }
-#wipe.go .wipe-panel {
-  transition: transform 0.95s var(--ease-sig);
-  transform: translateX(142vw) skewX(-6deg);
-}
-#wipe.go .wipe-panel:nth-child(2) { transition-delay: 0.09s; }
-#wipe.reset .wipe-panel {
-  transition: none;
-  transform: translateX(-72vw) skewX(-6deg);
-}
+.chapter { z-index: 2; }
 
 /* ---- 序章：巨幅书法主视觉（screen 混合，星光透笔画） ---- */
 #hero-brush {
@@ -690,4 +671,93 @@ body::after {
   #ch-prologue .prologue-center { max-width: 80vw; }
   .chapter .sticky::before { font-size: 200px; }
   .chapter .sticky::after { display: none; }
+}
+
+
+/* ============================================================
+   步入星官 · 聚焦模式
+   ============================================================ */
+#focus-panel {
+  position: fixed;
+  left: 5.5vw;
+  top: 50%;
+  transform: translateY(-50%) translateX(-24px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  max-height: 86vh;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.7s var(--ease-sig) 0.35s,
+    transform 0.7s var(--ease-sig) 0.35s;
+}
+#focus-panel.on {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+#focus-panel .focus-name {
+  writing-mode: vertical-rl;
+  font-family: var(--font-display);
+  font-size: clamp(56px, 9vh, 96px);
+  letter-spacing: 0.18em;
+  line-height: 1;
+  color: var(--gold);
+  text-shadow: 0 0 34px rgba(201, 162, 39, 0.5);
+  max-height: 52vh;
+  overflow: hidden;
+}
+#focus-panel .focus-meta {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--gold-dim);
+  opacity: 0.95;
+}
+#focus-panel .focus-members {
+  list-style: none;
+  columns: 2;
+  column-gap: 26px;
+  max-width: 300px;
+  max-height: 22vh;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 2;
+  color: var(--cream);
+  opacity: 0.85;
+}
+#focus-panel .focus-members li::before {
+  content: "·";
+  color: var(--gold-dim);
+  margin-right: 6px;
+}
+#focus-panel .focus-close {
+  margin-top: 4px;
+  padding: 7px 20px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  font-family: var(--font-body);
+  color: var(--gold);
+  background: rgba(201, 162, 39, 0.08);
+  border: 1px solid rgba(201, 162, 39, 0.55);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.35s var(--ease-sig),
+    box-shadow 0.35s var(--ease-sig);
+}
+#focus-panel .focus-close:hover {
+  background: rgba(201, 162, 39, 0.2);
+  box-shadow: 0 0 14px rgba(201, 162, 39, 0.35);
+}
+body.focusing #explore-hint { opacity: 0 !important; }
+body.focusing .panel-stack { opacity: 0; pointer-events: none; }
+.panel-stack { transition: opacity 0.5s var(--ease-sig); }
+
+@media (max-width: 860px) {
+  #focus-panel { left: 5vw; gap: 10px; }
+  #focus-panel .focus-name { font-size: 44px; max-height: 40vh; }
+  #focus-panel .focus-members { columns: 1; max-height: 18vh; }
 }

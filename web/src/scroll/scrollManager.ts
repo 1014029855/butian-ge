@@ -26,16 +26,31 @@ function sectionProgress(el: HTMLElement): number {
   return Math.min(1, Math.max(0, -rect.top / span));
 }
 
-function isInView(el: HTMLElement): boolean {
-  const r = el.getBoundingClientRect();
-  return r.top < window.innerHeight && r.bottom > 0;
+/**
+ * 单激活模型：任意时刻只有「占据视口中线」的那个章节是激活章节。
+ * 上下两个章节交界正好穿过视口中心时才切换，天然带迟滞，
+ * 不会出现卡在边界时两章反复争抢激活态的抖动。
+ */
+function centerChapter(): Chapter | null {
+  const mid = window.innerHeight * 0.5;
+  for (const ch of chapters) {
+    const r = ch.el.getBoundingClientRect();
+    if (r.top < mid && r.bottom > mid) return ch;
+  }
+  return null;
 }
 
-export function startScrollManager(onFrame: () => void): void {
+export function startScrollManager(onFrame: () => void, onActive?: (id: string) => void): void {
+  let activeId: string | null = null;
   const onScroll = () => {
-    for (const ch of chapters) {
-      ch.isActive = isInView(ch.el);
-      if (ch.isActive) ch.update(sectionProgress(ch.el));
+    const center = centerChapter();
+    for (const ch of chapters) ch.isActive = ch === center;
+    if (center) {
+      center.update(sectionProgress(center.el));
+      if (center.id !== activeId) {
+        activeId = center.id;
+        onActive?.(center.id);
+      }
     }
     onFrame();
   };

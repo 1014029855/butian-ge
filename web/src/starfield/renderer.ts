@@ -213,13 +213,7 @@ export interface RenderOptions {
   showLines?: boolean;
   /** 跳过清屏（调用方已绘制底衬，如天球仪球体） */
   skipClear?: boolean;
-  /** 引力透镜光标（屏幕坐标）：附近星点被剪切推挤、增亮放大 */
-  lens?: { x: number; y: number } | null;
 }
-
-/** 引力透镜作用半径（px）与最大位移（px） */
-const LENS_R = 170;
-const LENS_PUSH = 24;
 
 function rot(x: number, y: number, theta: number): { x: number; y: number } {
   if (!theta) return { x, y };
@@ -245,7 +239,6 @@ export function renderSky(
     labelIndices = [],
     showLines = true,
     skipClear = false,
-    lens = null,
   } = opts;
 
   if (!skipClear) ctx.clearRect(0, 0, width, height);
@@ -309,24 +302,9 @@ export function renderSky(
     const w = rot(wx, wy, rotation);
     const p = camera.toScreen(w.x, w.y);
     if (p.x < -12 || p.y < -12 || p.x > width + 12 || p.y > height + 12) continue;
-    let alpha = s.baseAlpha * twinkleOpacity(s.tw, tSec) * dimStarAlpha * fade;
+    const alpha = s.baseAlpha * twinkleOpacity(s.tw, tSec) * dimStarAlpha * fade;
     if (alpha <= 0.003) continue;
-    let r = s.r * R_SCALE;
-    // 引力透镜：光标附近星点向外剪切推挤，同时增亮放大
-    if (lens) {
-      const dx = p.x - lens.x;
-      const dy = p.y - lens.y;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < LENS_R * LENS_R && d2 > 0.01) {
-        const d = Math.sqrt(d2);
-        const f = 1 - d / LENS_R;
-        const push = f * f * LENS_PUSH;
-        p.x += (dx / d) * push;
-        p.y += (dy / d) * push;
-        alpha = Math.min(1, alpha * (1 + f * 1.1));
-        r *= 1 + f * 0.45;
-      }
-    }
+    const r = s.r * R_SCALE;
     if (r >= 2.4) {
       // 光晕
       ctx.globalAlpha = alpha * 0.16;
