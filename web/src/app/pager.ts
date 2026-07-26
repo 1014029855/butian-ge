@@ -77,18 +77,38 @@ export function createPager({ sections, names }: PagerOptions): { setCurrent(i: 
   const last = sections.length - 1;
   let current = 0;
 
+  /**
+   * 吸附点：每章从各自章顶起按整屏切分（末点钳在章底前的一屏）。
+   * 翻页在章内每次推进一整屏、跨章时精确落在下一章开头——
+   * 每一页都对齐一段完整内容，不出现半屏错位。
+   */
+  function snapPoints(): number[] {
+    const vh = window.innerHeight;
+    const pts: number[] = [];
+    for (const s of sections) {
+      const top = s.offsetTop;
+      const scrollable = Math.max(s.offsetHeight - vh, 0); // 本章可滚动行程
+      const steps = Math.round(scrollable / vh);
+      for (let k = 0; k <= steps; k++) pts.push(top + Math.min(k * vh, scrollable));
+    }
+    return pts.sort((a, b) => a - b);
+  }
+
   function render(): void {
     idx.textContent = names[current] ? `${names[current]} · ${current + 1}/${sections.length}` : `${current + 1}/${sections.length}`;
-    // 翻页步长 = 一屏；到顶/到底禁用
     const maxY = document.documentElement.scrollHeight - window.innerHeight;
     prev.disabled = window.scrollY <= 2;
     next.disabled = window.scrollY >= maxY - 2;
   }
   function go(dir: number): void {
-    // 一屏一翻：滚动吸附到最近整屏，避免半屏错位累积
-    const vh = window.innerHeight;
-    const target = Math.round(window.scrollY / vh) * vh + dir * vh;
-    window.scrollTo({ top: Math.min(Math.max(target, 0), document.documentElement.scrollHeight - vh), behavior: "smooth" });
+    const pts = snapPoints();
+    const y = window.scrollY;
+    const EPS = 2;
+    const target =
+      dir > 0
+        ? (pts.find((p) => p > y + EPS) ?? pts[pts.length - 1])
+        : ([...pts].reverse().find((p) => p < y - EPS) ?? 0);
+    if (target !== undefined) window.scrollTo({ top: target, behavior: "smooth" });
   }
   prev.addEventListener("click", () => go(-1));
   next.addEventListener("click", () => go(1));
