@@ -1,51 +1,44 @@
 /**
- * ch2 状态机纯逻辑单测：段归属（ch2SegmentOf）、提示升级计数（ch2HintLevel）、
- * 段1 各句生长状态（ch2Seg1LineStates）、寻星令计分规则（ch2TimeLimit /
- * ch2ComboMultiplier / ch2ScoreFor / ch2Grade / ch2Shuffle）、
- * 「加厚」新逻辑（ch2QuestKind / ch2BlitzTargets / ch2BuildDeck /
- * ch2NormalizeRanks / ch2RankOf / ch2SpectralClass / ch2Brightest / ch2ArchiveLine），
- * 以及 CH2_QUESTS 题库形状守护（12 题四题型 + ch2 合成闪电快答共 13 题一局、
- * target 核对 asterisms.json 与 poem.json 实际键名、选项题选项合法、
- * TARGET_DIRS 质心表覆盖全部判定目标）。
+ * ch2「唤星之旅」纯逻辑单测：段归属（ch2SegmentOf）、段1 各句生长
+ * （ch2Seg1LineStates）、唤醒判定（ch2GuideTarget / ch2CanAwaken）、
+ * 分区归属（ch2RegionOf / CH2_REGIONS，含 poem.json 实数据守护）、
+ * 解锁档位（ch2UnlockTier / CH2_UNLOCKS）、最近沉睡选择（ch2NearestSleeping）、
+ * 质心/角距（ch2Centroid / ch2AngularDistanceDeg）、泛音音高（ch2PluckFreq）、
+ * 诗句摘句（ch2PoemExcerpt）、存档解析（ch2ParseAwakened）与常量契约。
  *
- * 只覆盖纯函数与静态数据；DOM/计时器/拾取的事件流以人工路径核对（见重构报告）。
+ * 只覆盖纯函数与静态数据；DOM/计时器/拾取/星使的事件流以人工路径核对。
  */
 import { describe, expect, it } from "vitest";
 import asterismsRaw from "../../public/data/asterisms.json?raw";
 import poemRaw from "../../public/data/poem.json?raw";
 import {
-  CH2_BLITZ_DEFAULT_TARGETS,
-  CH2_BLITZ_SECONDS,
-  CH2_GRADE_JIA,
-  CH2_GRADE_YI,
-  CH2_MAX_HEARTS,
-  CH2_RANKS_FALLBACK,
-  CH2_ROUND_SIZE,
+  CH2_GAZE_ANGLE_DEG,
+  CH2_GAZE_HOLD_S,
+  CH2_GUIDE_STATIONS,
+  CH2_IDLE_PULSE_S,
+  CH2_REGIONS,
   CH2_SEG1_END,
   CH2_SEG1_LINE_COUNT,
   CH2_SEG2_END,
-  CH2_TIME_LIMIT_EARLY_S,
-  CH2_TIME_LIMIT_LATE_S,
-  CH2_URGENT_HINT_SECONDS,
-  TARGET_DIRS,
-  ch2ArchiveLine,
-  ch2BlitzTargets,
-  ch2Brightest,
-  ch2BuildDeck,
-  ch2ComboMultiplier,
-  ch2Grade,
-  ch2HintLevel,
-  ch2NormalizeRanks,
-  ch2QuestKind,
-  ch2RankOf,
-  ch2ScoreFor,
+  CH2_SLEEP_DIM,
+  CH2_STORAGE_KEY,
+  CH2_UNLOCKS,
+  ch2AngularDistanceDeg,
+  ch2CanAwaken,
+  ch2Centroid,
+  ch2GuideTarget,
+  ch2NearestSleeping,
+  ch2ParseAwakened,
+  ch2PluckFreq,
+  ch2PoemExcerpt,
+  ch2RegionOf,
   ch2SegmentOf,
   ch2Seg1LineStates,
-  ch2Shuffle,
-  ch2SpectralClass,
-  ch2TimeLimit,
+  ch2UnlockTier,
 } from "./chapters/ch2";
-import { CH2_QUESTS, CH2_RANKS, type Ch2Quest } from "./copy";
+
+const poem = JSON.parse(poemRaw) as Record<string, { text: string; from: string }>;
+const asterisms = JSON.parse(asterismsRaw) as { asterisms: { name: string }[] };
 
 describe("ch2SegmentOf 段归属", () => {
   it("三段边界划分正确", () => {
@@ -60,21 +53,6 @@ describe("ch2SegmentOf 段归属", () => {
   it("越界输入按边界归属（ScrollTrigger 实际给 [0,1]，防御性钳制）", () => {
     expect(ch2SegmentOf(-0.1)).toBe(0);
     expect(ch2SegmentOf(1.1)).toBe(2);
-  });
-});
-
-describe("ch2HintLevel 提示升级计数", () => {
-  it("点错 0 次无提示，1 次箭头，2 次光圈", () => {
-    expect(ch2HintLevel(0, CH2_TIME_LIMIT_EARLY_S)).toBe(0);
-    expect(ch2HintLevel(1, CH2_TIME_LIMIT_EARLY_S)).toBe(1);
-    expect(ch2HintLevel(2, CH2_TIME_LIMIT_EARLY_S)).toBe(2);
-    expect(ch2HintLevel(5, CH2_TIME_LIMIT_EARLY_S)).toBe(2);
-  });
-  it("濒临超时（剩余 ≤4s）升级为光圈", () => {
-    expect(ch2HintLevel(0, CH2_URGENT_HINT_SECONDS + 0.1)).toBe(0);
-    expect(ch2HintLevel(0, CH2_URGENT_HINT_SECONDS)).toBe(2);
-    expect(ch2HintLevel(0, 0.5)).toBe(2);
-    expect(ch2HintLevel(1, CH2_URGENT_HINT_SECONDS)).toBe(2);
   });
 });
 
@@ -102,7 +80,7 @@ describe("ch2Seg1LineStates 段1 各句生长", () => {
     expect(end.finale).toBe(1);
     expect(end.lines.every((v) => v === 1)).toBe(true);
   });
-  it("随 p 单调不减（scrub 来回滚动的生长动画不倒退闪烁之外的跳变）", () => {
+  it("随 p 单调不减（scrub 来回滚动不倒退）", () => {
     let prev = ch2Seg1LineStates(0);
     for (let p = 0.01; p <= CH2_SEG1_END; p += 0.01) {
       const cur = ch2Seg1LineStates(p);
@@ -113,250 +91,225 @@ describe("ch2Seg1LineStates 段1 各句生长", () => {
   });
 });
 
-describe("寻星令计分规则", () => {
-  it("ch2TimeLimit：前 5 题 12s、其后 8s", () => {
-    for (let i = 0; i < 5; i++) expect(ch2TimeLimit(i)).toBe(CH2_TIME_LIMIT_EARLY_S);
-    for (let i = 5; i < CH2_ROUND_SIZE; i++) expect(ch2TimeLimit(i)).toBe(CH2_TIME_LIMIT_LATE_S);
-    expect(CH2_TIME_LIMIT_EARLY_S).toBe(12);
-    expect(CH2_TIME_LIMIT_LATE_S).toBe(8);
+describe("唤醒判定：ch2GuideTarget / ch2CanAwaken", () => {
+  it("引路三站固定为 北斗 → 北极 → 天狼", () => {
+    expect([...CH2_GUIDE_STATIONS]).toEqual(["北斗", "北极", "天狼"]);
   });
-  it("ch2ComboMultiplier：倍率 1→1.5→2→3（第 4 连击起封顶）", () => {
-    expect(ch2ComboMultiplier(1)).toBe(1);
-    expect(ch2ComboMultiplier(2)).toBe(1.5);
-    expect(ch2ComboMultiplier(3)).toBe(2);
-    expect(ch2ComboMultiplier(4)).toBe(3);
-    expect(ch2ComboMultiplier(10)).toBe(3);
+  it("ch2GuideTarget：取首座未唤醒站；三站俱醒回 null（自由收集）", () => {
+    expect(ch2GuideTarget(new Set())).toBe("北斗");
+    expect(ch2GuideTarget(new Set(["北斗"]))).toBe("北极");
+    expect(ch2GuideTarget(new Set(["北斗", "北极"]))).toBe("天狼");
+    expect(ch2GuideTarget(new Set(["北斗", "北极", "天狼"]))).toBeNull();
   });
-  it("ch2ScoreFor：1000×倍率，星雨双倍期间再 ×2", () => {
-    expect(ch2ScoreFor(1, false)).toBe(1000);
-    expect(ch2ScoreFor(2, false)).toBe(1500);
-    expect(ch2ScoreFor(3, false)).toBe(2000);
-    expect(ch2ScoreFor(4, false)).toBe(3000);
-    expect(ch2ScoreFor(5, true)).toBe(6000);
-    expect(ch2ScoreFor(1, true)).toBe(2000);
+  it("ch2GuideTarget：非引路站的唤醒不影响站序", () => {
+    expect(ch2GuideTarget(new Set(["织女"]))).toBe("北斗");
+    expect(ch2GuideTarget(new Set(["北斗", "织女"]))).toBe("北极");
   });
-  it("ch2Grade：甲/乙/丙阈值边界", () => {
-    expect(ch2Grade(CH2_GRADE_JIA)).toBe("甲");
-    expect(ch2Grade(CH2_GRADE_JIA - 1)).toBe("乙");
-    expect(ch2Grade(CH2_GRADE_YI)).toBe("乙");
-    expect(ch2Grade(CH2_GRADE_YI - 1)).toBe("丙");
-    expect(ch2Grade(0)).toBe("丙");
+  it("ch2CanAwaken：引路中只认当前站", () => {
+    const aw = new Set<string>();
+    expect(ch2CanAwaken("北斗", "北斗", aw)).toBe(true);
+    expect(ch2CanAwaken("天狼", "北斗", aw)).toBe(false); // 非当前站不可越站
+    expect(ch2CanAwaken("织女", "北斗", aw)).toBe(false);
   });
-  it("ch2Shuffle：不动原数组、保持多重集不变", () => {
-    const src = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
-    // 线性同余伪随机，保证单测确定性
-    let seed = 42;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
-    const out = ch2Shuffle(src, rand);
-    expect(out).toHaveLength(src.length);
-    expect([...out].sort((a, b) => a - b)).toEqual([...src]);
-    expect([...src]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // 原数组未动
+  it("ch2CanAwaken：自由收集认一切沉睡星官，已唤醒不重复", () => {
+    const aw = new Set(["北斗"]);
+    expect(ch2CanAwaken("心宿", null, aw)).toBe(true);
+    expect(ch2CanAwaken("北斗", null, aw)).toBe(false); // 已唤醒
+    expect(ch2CanAwaken("北斗", "北斗", aw)).toBe(false); // 引路目标本已醒（防御）
+    expect(ch2CanAwaken("", null, aw)).toBe(false); // 空名防御
   });
-  it("生命上限为 3 心", () => {
-    expect(CH2_MAX_HEARTS).toBe(3);
-  });
-});
-
-describe("CH2_QUESTS 寻星令题库", () => {
-  it("题库 12 题、四种题型混合（寻星 4 · 闪现 3 · 四选一 3 · 点星选名 2）", () => {
-    expect(CH2_QUESTS).toHaveLength(12);
-    const count: Record<string, number> = { seek: 0, flash: 0, choice: 0, name: 0, blitz: 0 };
-    for (const q of CH2_QUESTS) {
-      const kind = ch2QuestKind(q);
-      expect(count[kind], `未知题型 ${q.type as string}`).not.toBeUndefined();
-      count[kind]! += 1;
-    }
-    expect(count).toEqual({ seek: 4, flash: 3, choice: 3, name: 2, blitz: 0 });
-  });
-  it("target 非空且全局唯一；key/hint/hintWrong/plain/story 非空", () => {
-    expect(new Set(CH2_QUESTS.map((q) => q.target)).size).toBe(CH2_QUESTS.length);
-    for (const q of CH2_QUESTS) {
-      expect(q.key.length).toBeGreaterThan(0);
-      expect(q.hint.length).toBeGreaterThan(0);
-      expect(q.hintWrong.length).toBeGreaterThan(0);
-      expect(q.plain.length).toBeGreaterThan(0);
-      expect(q.story.length).toBeGreaterThan(0);
-    }
-  });
-  it("target 均为 asterisms.json 实际星官键名，且 poem.json 有对应引文", () => {
-    const ast = JSON.parse(asterismsRaw) as { asterisms: { name: string }[] };
-    const poem = JSON.parse(poemRaw) as Record<string, unknown>;
-    const names = new Set(ast.asterisms.map((a) => a.name));
-    for (const q of CH2_QUESTS) {
-      expect(names.has(q.target), `${q.target} 应在 asterisms.json 中`).toBe(true);
-      expect(poem[q.target], `${q.target} 应在 poem.json 中`).toBeTruthy();
-    }
-  });
-  it("选项题（四选一/点星选名）：恰好 4 个互不相同的选项，answer 下标合法；其余题型不带选项", () => {
-    for (const q of CH2_QUESTS) {
-      const kind = ch2QuestKind(q);
-      if (kind === "choice" || kind === "name") {
-        expect(q.options).toHaveLength(4);
-        expect(new Set(q.options).size).toBe(4);
-        expect(q.answer).toBeGreaterThanOrEqual(0);
-        expect(q.answer!).toBeLessThan(4);
-        expect(Number.isInteger(q.answer)).toBe(true);
-      } else {
-        expect(q.options).toBeUndefined();
-        expect(q.answer).toBeUndefined();
-      }
-    }
-  });
-  it("点星选名题：选项为星官名且正确项即 target 本名", () => {
-    for (const q of CH2_QUESTS) {
-      if (ch2QuestKind(q) !== "name") continue;
-      expect(q.options![q.answer!]).toBe(q.target);
-    }
-  });
-  it("判定目标全部有 TARGET_DIRS 质心（金环/金雨/镜头暗示依赖）", () => {
-    for (const q of ch2BuildDeck()) {
-      if (ch2QuestKind(q) === "blitz") {
-        for (const t of ch2BlitzTargets(q)) expect(TARGET_DIRS[t], `${t} 应有质心`).toBeTruthy();
-      } else {
-        expect(TARGET_DIRS[q.target], `${q.target} 应有质心`).toBeTruthy();
-      }
+  it("引路三站均为 asterisms.json 实际星官，且 poem.json 有引文与可归属分区", () => {
+    const names = new Set(asterisms.asterisms.map((a) => a.name));
+    for (const s of CH2_GUIDE_STATIONS) {
+      expect(names.has(s), `${s} 应在 asterisms.json 中`).toBe(true);
+      expect(poem[s], `${s} 应在 poem.json 中`).toBeTruthy();
+      expect(ch2RegionOf(poem[s]!.from), `${s} 应可归属分区`).not.toBeNull();
     }
   });
 });
 
-describe("ch2BuildDeck 一局牌堆（含合成闪电快答）", () => {
-  it("一局 13 题 = 题库 12 + 合成闪电 1；非闪电部分与题库同多重集", () => {
-    const deck = ch2BuildDeck();
-    expect(deck).toHaveLength(CH2_ROUND_SIZE);
-    expect(CH2_ROUND_SIZE).toBe(13);
-    const blitz = deck.filter((q) => ch2QuestKind(q) === "blitz");
-    expect(blitz).toHaveLength(1);
-    const rest = deck.filter((q) => ch2QuestKind(q) !== "blitz");
-    expect(rest.map((q) => q.key).sort()).toEqual(CH2_QUESTS.map((q) => q.key).sort());
+describe("分区归属：ch2RegionOf / CH2_REGIONS", () => {
+  it("三垣拆紫微/太微/天市，四象各归一区", () => {
+    expect(ch2RegionOf("三垣 · 紫微宫")).toBe("ziwei");
+    expect(ch2RegionOf("三垣 · 太微宫")).toBe("taiwei");
+    expect(ch2RegionOf("三垣 · 天市宫")).toBe("tianshi");
+    expect(ch2RegionOf("东方苍龙 · 氐宿")).toBe("qinglong");
+    expect(ch2RegionOf("东方青龙 · 角宿")).toBe("qinglong"); // 「青龙」写法同认
+    expect(ch2RegionOf("北方玄武 · 斗宿")).toBe("xuanwu");
+    expect(ch2RegionOf("西方白虎 · 参宿")).toBe("baihu");
+    expect(ch2RegionOf("南方朱雀 · 井宿")).toBe("zhuque");
   });
-  it("合成闪电题：默认小题 北斗/天狼/织女，均为 asterisms 星官且 poem.json 有引文", () => {
-    const blitz = ch2BuildDeck().find((q) => ch2QuestKind(q) === "blitz")!;
-    expect(ch2BlitzTargets(blitz)).toEqual([...CH2_BLITZ_DEFAULT_TARGETS]);
-    expect(CH2_BLITZ_SECONDS).toBe(3);
-    const ast = JSON.parse(asterismsRaw) as { asterisms: { name: string }[] };
-    const poem = JSON.parse(poemRaw) as Record<string, unknown>;
-    const names = new Set(ast.asterisms.map((a) => a.name));
-    for (const t of ch2BlitzTargets(blitz)) {
-      expect(names.has(t), `${t} 应在 asterisms.json 中`).toBe(true);
-      expect(poem[t], `${t} 应在 poem.json 中`).toBeTruthy();
-    }
+  it("无法归属回 null（不计入收集卷）", () => {
+    expect(ch2RegionOf("")).toBeNull();
+    expect(ch2RegionOf("域外 · 未知")).toBeNull();
   });
-});
-
-describe("ch2QuestKind 题型归一", () => {
-  const base = { key: "t", target: "北斗", hint: "h", hintWrong: "w", plain: "p", story: "s" };
-  const fake = (type: string): Ch2Quest => ({ ...base, type }) as Ch2Quest;
-  it("五种题型 id 正确映射", () => {
-    expect(ch2QuestKind(fake("seek"))).toBe("seek");
-    expect(ch2QuestKind(fake("flash"))).toBe("flash");
-    expect(ch2QuestKind(fake("choice"))).toBe("choice");
-    expect(ch2QuestKind(fake("name"))).toBe("name");
-    expect(ch2QuestKind(fake("blitz"))).toBe("blitz");
-  });
-  it("未知题型回退寻星（题库演进兜底）", () => {
-    expect(ch2QuestKind(fake("mystery"))).toBe("seek");
-    expect(ch2QuestKind(fake(""))).toBe("seek");
-  });
-});
-
-describe("ch2BlitzTargets 闪电小题目标表", () => {
-  const base = { key: "t", type: "blitz", target: "北斗", hint: "h", hintWrong: "w", plain: "p", story: "s" } as unknown as Ch2Quest;
-  it("无 targets 字段回退默认 北斗/天狼/织女", () => {
-    expect(ch2BlitzTargets(base)).toEqual(["北斗", "天狼", "织女"]);
-  });
-  it("合法 targets 字段优先（返回副本）", () => {
-    const q = { ...base, targets: ["天狼"] } as Ch2Quest & { targets: string[] };
-    const out = ch2BlitzTargets(q);
-    expect(out).toEqual(["天狼"]);
-    out.push("x");
-    expect((q as { targets: string[] }).targets).toEqual(["天狼"]); // 不动原数组
-  });
-  it("非法 targets（空表/非字符串）回退默认", () => {
-    expect(ch2BlitzTargets({ ...base, targets: [] } as Ch2Quest)).toEqual(["北斗", "天狼", "织女"]);
-    expect(ch2BlitzTargets({ ...base, targets: [1, 2] } as unknown as Ch2Quest)).toEqual(["北斗", "天狼", "织女"]);
-  });
-});
-
-describe("ch2NormalizeRanks / ch2RankOf 段位映射", () => {
-  it("归一化：滤非法项、按 min 升序", () => {
-    const ranks = ch2NormalizeRanks([
-      { name: "探花", min: 20000 },
-      { name: "童生", min: 0 },
-      { name: "缺阈值" },
-      null,
-      "junk",
-      { name: "秀才", min: 4000 },
+  it("收集卷恰为七分区（紫微/太微/天市/青龙/玄武/白虎/朱雀）", () => {
+    expect(CH2_REGIONS.map((r) => r.name)).toEqual([
+      "紫微",
+      "太微",
+      "天市",
+      "青龙",
+      "玄武",
+      "白虎",
+      "朱雀",
     ]);
-    expect(ranks.map((r) => r.name)).toEqual(["童生", "秀才", "探花"]);
-    expect(ch2NormalizeRanks("nope")).toEqual([]);
-    expect(ch2NormalizeRanks(undefined)).toEqual([]);
-    expect(ch2NormalizeRanks([])).toEqual([]);
   });
-  it("ch2RankOf：取 min ≤ score 的最高档；空表回空串", () => {
-    const ranks = ch2NormalizeRanks([
-      { name: "乙", min: 100 },
-      { name: "甲", min: 0 },
-    ]);
-    expect(ch2RankOf(0, ranks)).toBe("甲");
-    expect(ch2RankOf(99, ranks)).toBe("甲");
-    expect(ch2RankOf(100, ranks)).toBe("乙");
-    expect(ch2RankOf(99999, ranks)).toBe("乙");
-    expect(ch2RankOf(100, [])).toBe("");
-  });
-  it("兜底表：童生起 0、探花封顶，min 严格递增且对齐甲乙丙刻度", () => {
-    expect(CH2_RANKS_FALLBACK[0]).toEqual({ name: "童生", min: 0 });
-    expect(CH2_RANKS_FALLBACK[CH2_RANKS_FALLBACK.length - 1]!.name).toBe("探花");
-    for (let i = 1; i < CH2_RANKS_FALLBACK.length; i++) {
-      expect(CH2_RANKS_FALLBACK[i]!.min).toBeGreaterThan(CH2_RANKS_FALLBACK[i - 1]!.min);
+  it("poem.json 实数据：309 星官全部可归属，分区星数与数据相符", () => {
+    const counts: Record<string, number> = {};
+    for (const [name, entry] of Object.entries(poem)) {
+      const r = ch2RegionOf(entry.from);
+      expect(r, `${name} 的 from「${entry.from}」应可归属`).not.toBeNull();
+      counts[r!] = (counts[r!] ?? 0) + 1;
     }
-    expect(ch2RankOf(0, CH2_RANKS_FALLBACK)).toBe("童生");
-    expect(ch2RankOf(CH2_GRADE_YI, CH2_RANKS_FALLBACK)).toBe("贡士"); // 乙等线
-    expect(ch2RankOf(CH2_GRADE_JIA, CH2_RANKS_FALLBACK)).toBe("探花"); // 甲等线
-  });
-  it("copy 的 CH2_RANKS（降序导出）经归一化后映射正确", () => {
-    expect(CH2_RANKS.length).toBeGreaterThan(0);
-    const ranks = ch2NormalizeRanks(CH2_RANKS);
-    expect(ranks[0]!.name).toBe("童生");
-    expect(ranks[ranks.length - 1]!.name).toBe("探花");
-    for (let i = 1; i < ranks.length; i++) expect(ranks[i]!.min).toBeGreaterThan(ranks[i - 1]!.min);
-    expect(ch2RankOf(0, ranks)).toBe("童生");
-    expect(ch2RankOf(30000, ranks)).toBe("探花");
-    expect(ch2RankOf(29999, ranks)).toBe("进士");
-    expect(ch2RankOf(6000, ranks)).toBe("秀才");
+    expect(Object.keys(poem)).toHaveLength(309);
+    expect(counts).toEqual({
+      ziwei: 41,
+      taiwei: 21,
+      tianshi: 18,
+      qinglong: 51,
+      xuanwu: 67,
+      baihu: 63,
+      zhuque: 48,
+    });
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(309);
   });
 });
 
-describe("ch2SpectralClass 色指数 → 光谱型", () => {
-  it("O/B/A/F/G/K/M 边界", () => {
-    expect(ch2SpectralClass(-0.33)).toBe("O");
-    expect(ch2SpectralClass(-0.3)).toBe("B");
-    expect(ch2SpectralClass(-0.01)).toBe("B");
-    expect(ch2SpectralClass(0)).toBe("A");
-    expect(ch2SpectralClass(0.29)).toBe("A");
-    expect(ch2SpectralClass(0.3)).toBe("F");
-    expect(ch2SpectralClass(0.59)).toBe("F");
-    expect(ch2SpectralClass(0.6)).toBe("G");
-    expect(ch2SpectralClass(0.79)).toBe("G");
-    expect(ch2SpectralClass(0.8)).toBe("K");
-    expect(ch2SpectralClass(1.39)).toBe("K");
-    expect(ch2SpectralClass(1.4)).toBe("M");
-    expect(ch2SpectralClass(1.8)).toBe("M");
+describe("解锁档位：ch2UnlockTier / CH2_UNLOCKS", () => {
+  it("档位阈值为 25%/50%/75%/100%", () => {
+    expect([...CH2_UNLOCKS]).toEqual([0.25, 0.5, 0.75, 1]);
+  });
+  it("边界：未及 25% 为 0，达档即升，100% 为 4", () => {
+    expect(ch2UnlockTier(0, 100)).toBe(0);
+    expect(ch2UnlockTier(24, 100)).toBe(0);
+    expect(ch2UnlockTier(25, 100)).toBe(1);
+    expect(ch2UnlockTier(49, 100)).toBe(1);
+    expect(ch2UnlockTier(50, 100)).toBe(2);
+    expect(ch2UnlockTier(74, 100)).toBe(2);
+    expect(ch2UnlockTier(75, 100)).toBe(3);
+    expect(ch2UnlockTier(99, 100)).toBe(3);
+    expect(ch2UnlockTier(100, 100)).toBe(4);
+  });
+  it("309 总数下的实际档位（77=24.9% 未达，78=25.2% 达档）", () => {
+    expect(ch2UnlockTier(77, 309)).toBe(0);
+    expect(ch2UnlockTier(78, 309)).toBe(1);
+    expect(ch2UnlockTier(309, 309)).toBe(4);
+  });
+  it("异常输入防御：total≤0 或唤醒≤0 一律 0 档", () => {
+    expect(ch2UnlockTier(5, 0)).toBe(0);
+    expect(ch2UnlockTier(5, -3)).toBe(0);
+    expect(ch2UnlockTier(0, 309)).toBe(0);
+    expect(ch2UnlockTier(-1, 309)).toBe(0);
   });
 });
 
-describe("ch2Brightest / ch2ArchiveLine 翻页卡档案行", () => {
-  it("ch2Brightest：取视星等最小者；空表回 null", () => {
-    const a = { mag: 2.0, ci: 0.5, dist: 10 };
-    const b = { mag: -1.46, ci: 0.0, dist: 8.6 };
-    expect(ch2Brightest([a, b])).toBe(b);
-    expect(ch2Brightest([a])).toBe(a);
-    expect(ch2Brightest([])).toBeNull();
+describe("最近沉睡选择：ch2NearestSleeping", () => {
+  const candidates = [
+    { name: "东", ra: 10, dec: 0 },
+    { name: "西", ra: 190, dec: 0 },
+    { name: "北", ra: 0, dec: 80 },
+    { name: "环", ra: 359.9, dec: 0 }, // 赤经环绕：与 0.1 仅差 0.2°
+  ] as const;
+  it("取与视线角距最小的未唤醒者", () => {
+    expect(ch2NearestSleeping(candidates, new Set(), { ra: 12, dec: 2 })).toBe("东");
+    expect(ch2NearestSleeping(candidates, new Set(), { ra: 0, dec: 70 })).toBe("北");
   });
-  it("ch2ArchiveLine：视星等 · 光谱 X 型 · 约 N 光年；缺段自动省略", () => {
-    expect(ch2ArchiveLine({ mag: -1.46, ci: 0.0, dist: 8.6 })).toBe("视星等 -1.46 · 光谱 A 型 · 约 8.6 光年");
-    expect(ch2ArchiveLine({ mag: 0.5, ci: 1.63, dist: null })).toBe("视星等 0.5 · 光谱 M 型");
-    expect(ch2ArchiveLine({ mag: 2.0, ci: null, dist: 432 })).toBe("视星等 2 · 约 432 光年");
-    expect(ch2ArchiveLine({ mag: 5.8, ci: null, dist: null })).toBe("视星等 5.8");
-    expect(ch2ArchiveLine(null)).toBe("");
+  it("赤经环绕正确（0.1° 视向取 359.9° 候选）", () => {
+    expect(ch2NearestSleeping(candidates, new Set(), { ra: 0.1, dec: 0 })).toBe("环");
+  });
+  it("跳过已唤醒；全醒回 null", () => {
+    expect(ch2NearestSleeping(candidates, new Set(["东"]), { ra: 12, dec: 2 })).toBe("环");
+    expect(
+      ch2NearestSleeping(candidates, new Set(["东", "西", "北", "环"]), { ra: 0, dec: 0 }),
+    ).toBeNull();
+    expect(ch2NearestSleeping([], new Set(), { ra: 0, dec: 0 })).toBeNull();
+  });
+});
+
+describe("质心与角距：ch2Centroid / ch2AngularDistanceDeg", () => {
+  it("单成员质心即其方向", () => {
+    const c = ch2Centroid([{ ra: 101.3, dec: -16.7 }])!;
+    expect(c.ra).toBeCloseTo(101.3, 5);
+    expect(c.dec).toBeCloseTo(-16.7, 5);
+  });
+  it("对称双成员质心取中点方向（赤经环绕侧亦正确）", () => {
+    const c = ch2Centroid([
+      { ra: 359, dec: 0 },
+      { ra: 1, dec: 0 },
+    ])!;
+    expect(Math.abs(c.ra)).toBeCloseTo(0, 4); // 中点 ra≈0（而非 180）
+    expect(c.dec).toBeCloseTo(0, 5);
+  });
+  it("空表或对抵消回 null", () => {
+    expect(ch2Centroid([])).toBeNull();
+    expect(
+      ch2Centroid([
+        { ra: 0, dec: 0 },
+        { ra: 180, dec: 0 },
+      ]),
+    ).toBeNull();
+  });
+  it("角距：同向为 0，正交为 90，对跖为 180", () => {
+    expect(ch2AngularDistanceDeg({ ra: 30, dec: 40 }, { ra: 30, dec: 40 })).toBeLessThan(1e-3);
+    expect(ch2AngularDistanceDeg({ ra: 0, dec: 0 }, { ra: 90, dec: 0 })).toBeCloseTo(90, 6);
+    expect(ch2AngularDistanceDeg({ ra: 0, dec: 0 }, { ra: 123, dec: 90 })).toBeCloseTo(90, 6);
+    expect(ch2AngularDistanceDeg({ ra: 10, dec: 20 }, { ra: 190, dec: -20 })).toBeCloseTo(180, 5);
+  });
+});
+
+describe("泛音音高：ch2PluckFreq", () => {
+  it("越亮越高（星等越小频率越高）", () => {
+    const sirius = ch2PluckFreq(-1.44); // 天狼
+    const mid = ch2PluckFreq(2);
+    const dim = ch2PluckFreq(5);
+    expect(sirius).toBeGreaterThan(mid);
+    expect(mid).toBeGreaterThan(dim);
+  });
+  it("暗于 5.5 等一律 A3（220Hz）；天狼 27.76 半音，极亮封顶 28 半音", () => {
+    expect(ch2PluckFreq(5.5)).toBeCloseTo(220, 6);
+    expect(ch2PluckFreq(9)).toBeCloseTo(220, 6);
+    // 天狼 mag=-1.44：(5.5+1.44)×4 = 27.76 半音（未达封顶）
+    expect(ch2PluckFreq(-1.44)).toBeCloseTo(220 * Math.pow(2, 27.76 / 12), 4);
+    expect(ch2PluckFreq(-10)).toBeCloseTo(220 * Math.pow(2, 28 / 12), 4); // 封顶
+  });
+});
+
+describe("诗句摘句：ch2PoemExcerpt", () => {
+  const text = "北斗之宿七星明，第一主帝名樞精，第二第三璇璣是";
+  it("默认取前两分句，以「，」相连", () => {
+    expect(ch2PoemExcerpt(text)).toBe("北斗之宿七星明，第一主帝名樞精");
+    expect(ch2PoemExcerpt(text, 1)).toBe("北斗之宿七星明");
+    expect(ch2PoemExcerpt(text, 99)).toBe(text); // 超出分句数取全句
+  });
+  it("单句无逗号原样返回；空串安全", () => {
+    expect(ch2PoemExcerpt("邱下一狼光蓬茸")).toBe("邱下一狼光蓬茸");
+    expect(ch2PoemExcerpt("")).toBe("");
+  });
+});
+
+describe("存档解析：ch2ParseAwakened", () => {
+  it("合法数组原样通过", () => {
+    expect(ch2ParseAwakened('["北斗","天狼"]')).toEqual(["北斗", "天狼"]);
+    expect(ch2ParseAwakened("[]")).toEqual([]);
+  });
+  it("坏 JSON / 非数组 / null 一律回空", () => {
+    expect(ch2ParseAwakened("{oops")).toEqual([]);
+    expect(ch2ParseAwakened('{"a":1}')).toEqual([]);
+    expect(ch2ParseAwakened('"北斗"')).toEqual([]);
+    expect(ch2ParseAwakened(null)).toEqual([]);
+    expect(ch2ParseAwakened("")).toEqual([]);
+  });
+  it("滤掉非字符串与空串项", () => {
+    expect(ch2ParseAwakened('["北斗",1,null,"","天狼"]')).toEqual(["北斗", "天狼"]);
+  });
+});
+
+describe("常量契约", () => {
+  it("沉睡压暗 0.08；凝视 4° / 0.8s；闲置 20s；存档键 ch2-awakened", () => {
+    expect(CH2_SLEEP_DIM).toBe(0.08);
+    expect(CH2_GAZE_ANGLE_DEG).toBe(4);
+    expect(CH2_GAZE_HOLD_S).toBe(0.8);
+    expect(CH2_IDLE_PULSE_S).toBe(20);
+    expect(CH2_STORAGE_KEY).toBe("ch2-awakened");
   });
 });
