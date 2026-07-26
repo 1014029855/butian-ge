@@ -212,6 +212,84 @@ div.sky-label { font-family: var(--font-display); }
 .chapter.inview .chapter-panel { opacity: 1; transform: translateY(0); }
 .chapter.inview .chapter-panel--center { transform: translate(-50%, -50%); }
 
+/* ---- 章节入场加厚：面板直接子元素依次上浮 18px（0.6s 缓出，stagger 0.08s
+   递增，纯 CSS）。transition-delay 只在 .inview 态生效——退出时回到 0 延迟，
+   子元素随面板同步集体退场；第 8 个及以后子元素共用 0.56s 上限延迟。 ---- */
+.chapter .chapter-panel > * {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.chapter.inview .chapter-panel > * { opacity: 1; transform: translateY(0); }
+.chapter.inview .chapter-panel > *:nth-child(2) { transition-delay: 0.08s; }
+.chapter.inview .chapter-panel > *:nth-child(3) { transition-delay: 0.16s; }
+.chapter.inview .chapter-panel > *:nth-child(4) { transition-delay: 0.24s; }
+.chapter.inview .chapter-panel > *:nth-child(5) { transition-delay: 0.32s; }
+.chapter.inview .chapter-panel > *:nth-child(6) { transition-delay: 0.4s; }
+.chapter.inview .chapter-panel > *:nth-child(7) { transition-delay: 0.48s; }
+.chapter.inview .chapter-panel > *:nth-child(n+8) { transition-delay: 0.56s; }
+
+/* ---- 序章副标题星尘（纯 CSS 零 JS）：.ch1-hook 由 ch1.ts 运行时创建，
+   此处只叠加装饰层，不改其布局与 reveal 逻辑。两层微型伪元素各背一组
+   box-shadow 星点（暖米金细星 + 哑光金粗星），以不同周期/相位呼吸微光；
+   星尘是副标题的子层，父元素 opacity 由 ch1 驱动，星尘天然随之显隐。 ---- */
+.ch1-hook { position: relative; animation: ch1-hook-glow 6s ease-in-out infinite; }
+@keyframes ch1-hook-glow {
+  0%, 100% { text-shadow: 0 0 10px rgba(201, 162, 39, 0.18); }
+  50% { text-shadow: 0 0 16px rgba(201, 162, 39, 0.38); }
+}
+.ch1-hook::before,
+.ch1-hook::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: none;
+}
+.ch1-hook::before {
+  width: 2px;
+  height: 2px;
+  box-shadow:
+    -310px -38px 3px 0 rgba(252, 225, 182, 0.85),
+    -262px 30px 2px 0 rgba(252, 225, 182, 0.6),
+    -208px -52px 3px 0 rgba(252, 225, 182, 0.9),
+    -160px 12px 2px 0 rgba(252, 225, 182, 0.55),
+    -118px -28px 3px 0 rgba(252, 225, 182, 0.8),
+    -72px 44px 2px 0 rgba(252, 225, 182, 0.65),
+    -28px -46px 3px 0 rgba(252, 225, 182, 0.9),
+    16px 26px 2px 0 rgba(252, 225, 182, 0.55),
+    58px -18px 3px 0 rgba(252, 225, 182, 0.85),
+    104px 48px 2px 0 rgba(252, 225, 182, 0.6),
+    152px -40px 3px 0 rgba(252, 225, 182, 0.9),
+    198px 8px 2px 0 rgba(252, 225, 182, 0.6),
+    246px -30px 3px 0 rgba(252, 225, 182, 0.8),
+    296px 34px 2px 0 rgba(252, 225, 182, 0.65),
+    330px -12px 3px 0 rgba(252, 225, 182, 0.75),
+    -336px 6px 2px 0 rgba(252, 225, 182, 0.5);
+  animation: ch1-stardust 3.6s ease-in-out infinite;
+}
+.ch1-hook::after {
+  width: 3px;
+  height: 3px;
+  box-shadow:
+    -284px -8px 4px 0 rgba(201, 162, 39, 0.9),
+    -188px 38px 4px 0 rgba(201, 162, 39, 0.7),
+    -96px -56px 4px 0 rgba(201, 162, 39, 0.85),
+    2px 52px 4px 0 rgba(201, 162, 39, 0.65),
+    84px -44px 4px 0 rgba(201, 162, 39, 0.9),
+    172px 24px 4px 0 rgba(201, 162, 39, 0.7),
+    268px -48px 4px 0 rgba(201, 162, 39, 0.8),
+    -352px -30px 4px 0 rgba(201, 162, 39, 0.6),
+    344px 16px 4px 0 rgba(201, 162, 39, 0.7);
+  animation: ch1-stardust 5.1s ease-in-out -2.4s infinite;
+}
+@keyframes ch1-stardust {
+  0%, 100% { opacity: 0.18; }
+  50% { opacity: 0.85; }
+}
+
 /* ---- ch2 星野漫游：面板栈 + 提示 ---- */
 .atlas-stack {
   position: absolute;

@@ -4,7 +4,8 @@
  * 导出契约（章节模块只按此形状消费，不得依赖具体文案文本）：
  *   - COPY：导出名固定，key 固定为 "ch1" ~ "ch8"，
  *     每条结构固定为 ChapterCopy（见下），经 ChapterCtx.copy 注入章节模块；
- *   - CH2_QUESTS：ch2「寻星令」游戏段题库（一局 10 题三种题型混合，见文件下方注释）；
+ *   - CH2_QUESTS：ch2「寻星令」游戏段题库（一局 12 题四种题型混合，见文件下方注释）；
+ *   - CH2_RANKS / CH2_VERDICTS：ch2 结算段位表与各段位评语（见文件下方注释）；
  *   - CH4_STOPS：ch4「走进紫微垣」五站巡游的站点表（见文件下方注释）；
  *   - CREDITS：ch8 致谢页用，形状 { heading, groups: [{ title, lines[] }] }。
  * 修改文案时保持上述形状不变。
@@ -120,7 +121,7 @@ export const COPY: Record<string, ChapterCopy> = {
 /**
  * ch2「寻星令」游戏段题库（供 chapters/ch2.ts 消费）。
  *
- * 一局 10 题、三种题型混合（寻星 4 · 闪现 3 · 四选一 3），ch2 每局开局
+ * 一局 12 题、四种题型混合（寻星 4 · 闪现 3 · 四选一 3 · 点星选名 2），ch2 每局开局
  * 洗牌重排（题型配比不变）。target 均为 asterisms.json 实际星官键名，
  * 已逐一核对；闪现与选择题目标从 309 星官里挑辨识度高的亮星/名官。
  *
@@ -130,27 +131,36 @@ export const COPY: Record<string, ChapterCopy> = {
  *       seek   寻星：按提示在天空中找到目标星官并点击；
  *       flash  闪现：目标高亮 1.5s 后熄灭，凭记忆点回；
  *       choice 四选一：卡面给星官名，四个选项文本（诗句/描述混搭）点正确项；
+ *       name   点星选名：目标星官在天空高亮，四个选项为星官名，点选正确名；
  *   - target：asterisms.json 的星官键名——拾取判定（PickPayload.info.name）
  *     与点亮（setGroupProgress）都以此为准；
- *   - hint：题目卡提示语（flash 题型强调「只看一瞬」，choice 题型为设问句）；
+ *   - hint：题目卡提示语（flash 题型强调「只看一瞬」，choice 题型为设问句，
+ *     name 题型提示看天空高亮处）；
+ *   - hintWrong：答错时的一句引导——告诉玩家「应该怎么看」；
  *   - plain：答对后的一句白话释义；
- *   - options / answer：仅 choice 题型——四个选项文本与正确项下标；
- *     选项中的诗句为《步天歌》繁体原文摘句（与 poem.json 一致），
- *     干扰项取邻近/易混星官的诗句或描述。
+ *   - story：一句星官文化故事（答对后随 plain 一并展示，一句为限）；
+ *   - options / answer：仅 choice / name 题型——四个选项文本与正确项下标；
+ *     choice 选项中的诗句为《步天歌》繁体原文摘句（与 poem.json 一致），
+ *     干扰项取邻近/易混星官的诗句或描述；name 选项为 4 个星官名，
+ *     干扰项取形态或方位易混的星官。
  * 答对后展示的诗句不在此列：ch2 运行时 fetch /data/poem.json，
  * 按 target 查 { text, from }（数据为繁体原文，保持原样引用）。
  */
-export type Ch2QuestType = "seek" | "flash" | "choice";
+export type Ch2QuestType = "seek" | "flash" | "choice" | "name";
 
 export interface Ch2Quest {
   key: string;
   type: Ch2QuestType;
   target: string;
   hint: string;
+  /** 答错时的一句引导：告诉玩家应该怎么看 */
+  hintWrong: string;
   plain: string;
-  /** 仅 choice 题型：四个选项文本（诗句/描述混搭） */
+  /** 一句星官文化故事（答对后随 plain 一并展示） */
+  story: string;
+  /** 仅 choice / name 题型：四个选项文本（choice 为诗句/描述混搭，name 为星官名） */
   options?: readonly string[];
-  /** 仅 choice 题型：正确项在 options 中的下标 */
+  /** 仅 choice / name 题型：正确项在 options 中的下标 */
   answer?: number;
 }
 
@@ -160,27 +170,34 @@ export const CH2_QUESTS: readonly Ch2Quest[] = [
     type: "seek",
     target: "北斗",
     hint: "找到那把勺子——七颗星连成的斗，就挂在北天。",
+    hintWrong: "先面朝北：七颗星连成的长勺，勺口两颗星永远指向北极星。",
     plain: "北斗七星：天帝的车驾，斗柄所指，即是四方与四时。",
+    story: "「斗为帝车，运于中央，临制四乡」——斗柄东指，天下皆春。",
   },
   {
     key: "天狼",
     type: "seek",
     target: "天狼",
     hint: "找到全天最亮的星——南方低空，耀眼夺目的那一颗。",
+    hintWrong: "自参宿腰带向东南找：全天最亮、白得晃眼的那一颗，不会是别的星。",
     plain: "天狼是全天第一亮星，在井宿之野独坐，古人以它主侵掠。",
+    story: "天狼主侵掠；苏轼「会挽雕弓如满月，西北望，射天狼」，射的正是它。",
   },
   {
     key: "勾陈",
     type: "flash",
     target: "勾陈",
     hint: "只看一瞬——记住紫微垣中、今夜北极星所在的那一组，它随即隐去。",
+    hintWrong: "先定北极星——正北方、独自不动的那颗；钩形六星就环在它身侧。",
     plain: "勾陈六星形如钩，勾陈一就是当代北极星。",
+    story: "勾陈是帝之后妃的车驾；其最亮者勾陈一，今夜正坐在天的北极点上。",
   },
   {
     key: "北极",
     type: "choice",
     target: "北极",
     hint: "「北极」——四句之中，哪一句说的是它？",
+    hintWrong: "《步天歌》开篇写紫微垣：认准「北极五星在其中」——北斗、勾陈各是另一官。",
     options: [
       "「中元北極紫微宮，北極五星在其中」",
       "「北斗之宿七星明，第一主帝名樞精」",
@@ -189,26 +206,32 @@ export const CH2_QUESTS: readonly Ch2Quest[] = [
     ],
     answer: 0,
     plain: "北极五星：太子、帝、庶子、后宫、天枢——天皇一家，以星列位。",
+    story: "「为政以德，譬如北辰，居其所而众星共之」——《论语》里的北辰，就是这一官。",
   },
   {
     key: "织女",
     type: "seek",
     target: "织女",
     hint: "找到织女——银河西岸，与牵牛隔河相望的亮星。",
+    hintWrong: "先找银河：河西岸最亮的青白色星才是织女——河东岸的是河鼓。",
     plain: "织女三星，七夕故事的主角，一万年后将继任北极星。",
+    story: "七夕乞巧夜，女子对月穿针，拜的正是银河西岸这位织女。",
   },
   {
     key: "河鼓",
     type: "flash",
     target: "河鼓",
     hint: "只看一瞬——记住银河东岸的牵牛三星，它随即隐去。",
+    hintWrong: "看银河东岸：三颗星排成一线、中间最亮，像挑着一副担子。",
     plain: "河鼓三星即牵牛，与织女隔河相望，七夕的故事由此而来。",
+    story: "《诗经》已有「睆彼牵牛」之句——河鼓即牵牛，七夕的故事由它而起。",
   },
   {
     key: "昴宿",
     type: "choice",
     target: "昴宿",
     hint: "「昴宿」——四句之中，哪一句说的是它？",
+    hintWrong: "关键在「七星一聚」：昴宿是一群挤作一团的星，不是排成一线的三星。",
     options: [
       "「牛上直建三河鼓，鼓上三星號織女」",
       "「七星一聚實不少，阿西月東各一星」",
@@ -217,26 +240,32 @@ export const CH2_QUESTS: readonly Ch2Quest[] = [
     ],
     answer: 1,
     plain: "昴宿七星聚作一团，即西方白虎的昴星团，民间呼为七姊妹。",
+    story: "七星一聚，民间唤作七姊妹；《天官书》称之为髦头，占胡人边事。",
   },
   {
     key: "心宿",
     type: "seek",
     target: "心宿",
     hint: "找到苍龙之心——东方三星相依，中央那颗最红，名叫大火。",
+    hintWrong: "在东方苍龙的中段找：三颗星相依，中央那颗明显发红。",
     plain: "心宿三星：中央「大火」色最红，古人观大火以候寒暑。",
+    story: "《诗经》「七月流火」的大火就在此宿——观大火，所以授农时。",
   },
   {
     key: "北落师门",
     type: "flash",
     target: "北落师门",
     hint: "只看一瞬——记住南方孤悬的那颗亮星，它随即隐去。",
+    hintWrong: "朝秋夜南天最空旷处看：四周无伴、独自发亮的那一颗即是。",
     plain: "北落师门：羽林军南门外独守的亮星，秋夜南天最醒目的一颗。",
+    story: "北落师门是羽林军的南门，一门孤悬南天，古人以它候兵事。",
   },
   {
     key: "老人",
     type: "choice",
     target: "老人",
     hint: "「老人」——四句之中，哪一句说的是它？",
+    hintWrong: "认准「南极」与「寿」：弓矢射狼都属井宿诸官，「春秋出入壽無窮」才是老人。",
     options: [
       "「左畔九個彎弧弓，一矢擬射頑狼胸」",
       "「邱下一狼光蓬茸」",
@@ -245,8 +274,60 @@ export const CH2_QUESTS: readonly Ch2Quest[] = [
     ],
     answer: 3,
     plain: "老人星：南极仙翁，南天第二亮星，古人以它主寿安。",
+    story: "老人星见则天下寿安，秦汉起便立祠祝祭——它就是南极仙翁。",
+  },
+  {
+    key: "参宿",
+    type: "name",
+    target: "参宿",
+    hint: "天空中高亮的这一组，是哪一位星官？",
+    hintWrong: "先数腰带：三颗星斜排成一线，上下各两星作肩与足——这是参宿。",
+    options: ["参宿", "心宿", "斗宿", "毕宿"],
+    answer: 0,
+    plain: "参宿七星：白虎之躯，腰带三星成一线，冬夜最惹眼的星群。",
+    story: "参宿七星即西方的猎户；腰间三星成一线，「参」的本义就是三。",
+  },
+  {
+    key: "轩辕",
+    type: "name",
+    target: "轩辕",
+    hint: "天空中高亮的这一组，是哪一位星官？",
+    hintWrong: "找那条龙：朱雀背上十七星连绵成弧的才是轩辕，不是短促的柳、张。",
+    options: ["轩辕", "翼宿", "柳宿", "天纪"],
+    answer: 0,
+    plain: "轩辕十七星：蜿蜒如黄龙，横陈于南方朱雀之上。",
+    story: "轩辕以黄帝之号为名，十七星蜿蜒如龙，是南方最绵长的一官。",
   },
 ];
+
+/**
+ * ch2「寻星令」结算段位表与各段位评语（供 chapters/ch2.ts 消费）。
+ *
+ * CH2_RANKS 按 min 从高到低排序，便于查找：取第一个 score >= min 的段位
+ * 即为所中（min 为下含阈值，童生 0 兜底）。段名沿用科举旧称。
+ * CH2_VERDICTS 以段位名为键，每段 2~3 句评语，结算卡逐行展示；
+ * 文风克制，不复述分数。
+ */
+export const CH2_RANKS: readonly { name: string; min: number }[] = [
+  { name: "探花", min: 30000 },
+  { name: "进士", min: 24000 },
+  { name: "贡士", min: 18000 },
+  { name: "举人", min: 12000 },
+  { name: "秀才", min: 6000 },
+  { name: "童生", min: 0 },
+];
+
+export const CH2_VERDICTS: Record<string, string[]> = {
+  探花: [
+    "众星已为故友。",
+    "三垣四象，如数家珍——这一夜，步天歌是唱给你听的。",
+  ],
+  进士: ["星野已熟，偶有一二疏漏。", "再认几夜，满天皆可呼名。"],
+  贡士: ["大半星官，已能相认。", "余下几位多在边角，要多走几步才遇得见。"],
+  举人: ["名星已识，星官的职司还生。", "把答错的几位再认一遍，便是进益。"],
+  秀才: ["已入门径：几组名星之外，尚有整片星野。", "先从北斗与织女认起，路就顺了。"],
+  童生: ["莫急，抬头多看几夜。", "星星不走，等你认它。"],
+};
 
 /**
  * ch4「走进紫微垣」五站巡游站点表（供 chapters/ch4.ts 消费，按巡游顺序）。

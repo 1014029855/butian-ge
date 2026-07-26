@@ -18,6 +18,16 @@
  *   - 每帧由 app 主循环调用 applyCameraState(rig.sampleGlobal(g))；
  *   - 章节模块用 setGroupProgress / setLabelsEnabled / setPickingEnabled /
  *     setBloom / onPick 等高层 API。
+ *
+ * 时间缩放与粒子特效（寻星令「加厚」契约）：
+ *   - setTimeScale(k)：渲染循环 dt 缩放系数（默认 1；0.5 慢镜；0 暂停时间）。
+ *     frame 里 dt 先乘 scale 再分发——只作用于时间驱动量（相机阻尼/轨道
+ *     惯性/漂移、星点闪烁时钟、粒子特效、frameHook 章节脚本）；帧率监测
+ *     （quality）吃真实帧间隔 rawDt，慢镜不会误触画质降档，渲染帧率不变；
+ *   - spawnBurst(p, opts)：p 处一次性金色粒子爆发（默认 90 粒，1.2s 消散）；
+ *   - spawnMeteors(n)：n 颗流星从随机方向沿大圆斜掠天球（1~1.5s 自清理）；
+ *   - 粒子实例统一挂 skyRoot（随天球刚体旋转），每帧 update，寿终自动
+ *     dispose（实现见 sky3d/particles.ts）。
  */
 import * as THREE from "three";
 import { radecToVec3, precessionMat3 } from "../sky3d/coords";
@@ -34,10 +44,21 @@ import { createQualityMonitor, type QualityMonitor, type QualityTier } from "../
 import { createLabels, type LabelsHandle } from "../sky3d/Labels";
 import { pickStar } from "../sky3d/hitTest";
 import { createDetailCard, type DetailCardHandle, type DetailInfo } from "../sky3d/detailCard";
+import {
+  createBurst,
+  createMeteor,
+  type BurstOptions,
+  type ParticleEffect,
+} from "../sky3d/particles";
 import { gazeQuat, type CameraState } from "./CameraRig";
 
 /** 天球半径（世界单位） */
 export const R = 100;
+
+/** 流星壳层半径系数（略在星面内侧，避免与星点 z-fight） */
+const METEOR_SHELL_K = 0.97;
+/** spawnMeteors 单次调用上限（防误传大数打爆特效表） */
+const METEOR_MAX_PER_CALL = 24;
 
 /** bloom 调优终值（tier0 全量；tier1 半强度；tier2 由 setEnabled 关闭）。
  *  P3 收敛：threshold 0.5→0.58、strength 0.9→0.78（ch2 亮星光球偏大反馈） */
@@ -173,6 +194,12 @@ export class SkyApp {
   private elapsed = 0; // 星点闪烁时钟（秒），星空加载完成后开始累计
   private frameHook: FrameHook | null = null;
   private started = false;
+
+  // ---- 时间缩放与一次性粒子特效（寻星令「加厚」契约，语义见文件头） ----
+  /** dt 缩放系数（默认 1；0.5 慢镜；0 暂停时间驱动量），钳制 [0, 4] */
+  private timeScale = 1;
+  /** 存活中的一次性粒子特效（挂 skyRoot，每帧 update，寿终自 dispose） */
+  private readonly effects: ParticleEffect[] = [];
 
   // updateCamera 每帧复用的临时对象（避免逐帧分配）
   private readonly gazeEuler = new THREE.Euler(0, 0, 0, "YXZ");
@@ -438,6 +465,49 @@ export class SkyApp {
     this.skyRoot.quaternion.copy(this.tmpSkyQ).multiply(this.tmpSkyQY);
   }
 
+  // ---------------------------------------------------------------- 时间缩放与粒子特效
+
+  /**
+   * 渲染循环 dt 缩放系数：k=1 正常（默认），0.5 慢镜，0 暂停时间驱动量。
+   * 只缩放时间驱动量（相机阻尼/惯性/漂移、星点闪烁、粒子、frameHook），
+   * 不影响渲染帧率，也不进帧率监测（quality 吃真实帧间隔）。钳制 [0, 4]，
+   * 非有限输入回退 1。
+   */
+  setTimeScale(k: number): void {
+    this.timeScale = Number.isFinite(k) ? THREE.MathUtils.clamp(k, 0, 4) : 1;
+  }
+
+  /**
+   * 在 p（skyRoot 局部坐标，通常是星面位置）处放一次性金色粒子爆发：
+   * 默认 90 粒、初速沿球面法向 + 随机切向、0.9 指数阻尼、1.2s 透明衰减
+   * 到 0 后自动 dispose（参数与实现见 sky3d/particles.ts）。
+   */
+  spawnBurst(p: { x: number; y: number; z: number }, opts?: BurstOptions): void {
+    this.addEffect(createBurst(p, opts));
+  }
+
+  /**
+   * 放 n 颗流星：从 0.97R 壳层随机方向出发沿大圆斜掠，长尾渐隐，
+   * 寿命 1~1.5s（批内 ≤0.35s 错落入场），消散自清理。单次上限 24 颗。
+   */
+  spawnMeteors(n: number): void {
+    const count = Math.min(METEOR_MAX_PER_CALL, Math.max(0, Math.floor(n)));
+    for (let i = 0; i < count; i++) this.addEffect(createMeteor(R * METEOR_SHELL_K));
+  }
+
+  /** 登记一次性特效：挂进 skyRoot（随天球刚体旋转），由渲染循环逐帧 update */
+  private addEffect(e: ParticleEffect): void {
+    this.skyRoot.add(e.object);
+    this.effects.push(e);
+  }
+
+  /** 每帧推进全部存活特效；update 返回 false（寿终，已自 dispose）即移出特效表 */
+  private updateEffects(dt: number): void {
+    for (let i = this.effects.length - 1; i >= 0; i--) {
+      if (!this.effects[i].update(dt)) this.effects.splice(i, 1);
+    }
+  }
+
   // ---------------------------------------------------------------- 内部
 
   private tierDpr(): number {
@@ -698,11 +768,15 @@ export class SkyApp {
   }
 
   private readonly frame = (): void => {
-    const dt = Math.min(this.clock.getDelta(), 0.1);
-    this.quality.update(dt);
+    const rawDt = Math.min(this.clock.getDelta(), 0.1);
+    // dt 先乘 timeScale 再分发：只缩放时间驱动量（语义见文件头）；
+    // 帧率监测吃真实帧间隔 rawDt——慢镜不会让 EMA 帧率腰斩误触降档。
+    const dt = rawDt * this.timeScale;
+    this.quality.update(rawDt);
     this.frameHook?.(dt);
     this.updateCamera(dt);
     this.updateHover();
+    this.updateEffects(dt);
 
     const camR = this.camera.position.length();
     const sky = this.sky;
