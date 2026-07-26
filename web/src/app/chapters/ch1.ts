@@ -6,20 +6,14 @@
  * 写法取自旧 style.css 的 #app-title）+ hook 引子 + body 正文 + 朱砂印
  * （copy.seal）+ 底部「向下滚动 · 步入夜空」浮动提示。
  *
- * update(p) 驱动标题浮现：p∈[0, TITLE_END] 内 opacity / letter-spacing /
- * 模糊渐进，之后保持终态；hook / body / 印章以更晚的窗口渐次跟上，
+ * 标题：开屏即现——只在页面加载时做一次入场动画（CSS keyframes，
+ * 与滚动进度脱钩）；hook / body / 印章以滚动窗口渐次跟上，
  * 滚动提示随滚动淡出。enter 关闭星官名标签（序章不出标签），exit 恢复。
  */
 import type { Chapter, ChapterCtx } from "../chapters";
 
-/** 标题浮现窗口：p∈[0, TITLE_END]，之后保持终态 */
-const TITLE_END = 0.6;
 /** 标题终态字距 em（与旧站 #app-title 一致） */
 const TITLE_TRACKING_EM = 0.22;
-/** 标题起态字距 em（由宽排收拢到终态） */
-const TITLE_TRACKING_START_EM = 0.55;
-/** 标题起态模糊半径 px */
-const TITLE_BLUR_START_PX = 14;
 
 const CH1_CSS = `
 .ch1-stage {
@@ -50,9 +44,24 @@ const CH1_CSS = `
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  opacity: 0;
+  filter: drop-shadow(0 0 26px rgba(201, 162, 39, 0.45));
   margin-bottom: 24px;
-  will-change: opacity, letter-spacing, filter, transform;
+  /* 开屏即现：标题只随页面加载做一次入场动画，与滚动进度脱钩 */
+  animation: ch1-title-in 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both;
+}
+@keyframes ch1-title-in {
+  from {
+    opacity: 0;
+    letter-spacing: 0.55em;
+    filter: blur(14px) drop-shadow(0 0 26px rgba(201, 162, 39, 0.45));
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    letter-spacing: ${TITLE_TRACKING_EM}em;
+    filter: blur(0) drop-shadow(0 0 26px rgba(201, 162, 39, 0.45));
+    transform: translateY(0);
+  }
 }
 .ch1-hook {
   font-size: 17px;
@@ -156,26 +165,13 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   cue.textContent = "向下滚动 · 步入夜空";
   pin.appendChild(cue);
 
-  const titleEl = stage.querySelector<HTMLElement>(".ch1-title")!;
   const hookEl = stage.querySelector<HTMLElement>(".ch1-hook")!;
   const bodyEl = stage.querySelector<HTMLElement>(".ch1-body")!;
   const sealEl = stage.querySelector<HTMLElement>(".ch1-seal");
 
   // update(p) 高频调用：记录上次取值，变化量过小则跳过 DOM 写
-  let lastTitle = -1;
   let lastCue = -1;
   const lastReveal = new Map<HTMLElement, number>();
-
-  function applyTitle(t: number): void {
-    if (Math.abs(t - lastTitle) < 1e-4) return;
-    lastTitle = t;
-    titleEl.style.opacity = t.toFixed(3);
-    titleEl.style.letterSpacing =
-      (TITLE_TRACKING_START_EM - (TITLE_TRACKING_START_EM - TITLE_TRACKING_EM) * t).toFixed(3) +
-      "em";
-    titleEl.style.filter = `blur(${((1 - t) * TITLE_BLUR_START_PX).toFixed(2)}px) drop-shadow(0 0 26px rgba(201, 162, 39, 0.45))`;
-    titleEl.style.transform = `translateY(${((1 - t) * 26).toFixed(2)}px)`;
-  }
 
   /** 通用浮现：opacity + 上浮，带写跳过 */
   function reveal(el: HTMLElement, r: number, risePx = 18): void {
@@ -191,7 +187,6 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       ctx.sky.setLabelsEnabled(false); // 序章不显示星官名标签
     },
     update(p) {
-      applyTitle(ramp(p, 0, TITLE_END));
       reveal(hookEl, ramp(p, 0.15, 0.45));
       reveal(bodyEl, ramp(p, 0.3, 0.6));
       if (sealEl) {

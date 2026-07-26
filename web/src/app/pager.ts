@@ -79,15 +79,20 @@ export function createPager({ sections, names }: PagerOptions): { setCurrent(i: 
 
   function render(): void {
     idx.textContent = names[current] ? `${names[current]} · ${current + 1}/${sections.length}` : `${current + 1}/${sections.length}`;
-    prev.disabled = current <= 0;
-    next.disabled = current >= last;
+    // 翻页步长 = 一屏；到顶/到底禁用
+    const maxY = document.documentElement.scrollHeight - window.innerHeight;
+    prev.disabled = window.scrollY <= 2;
+    next.disabled = window.scrollY >= maxY - 2;
   }
   function go(dir: number): void {
-    const target = Math.min(Math.max(current + dir, 0), last);
-    sections[target]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // 一屏一翻：滚动吸附到最近整屏，避免半屏错位累积
+    const vh = window.innerHeight;
+    const target = Math.round(window.scrollY / vh) * vh + dir * vh;
+    window.scrollTo({ top: Math.min(Math.max(target, 0), document.documentElement.scrollHeight - vh), behavior: "smooth" });
   }
   prev.addEventListener("click", () => go(-1));
   next.addEventListener("click", () => go(1));
+  window.addEventListener("scroll", render, { passive: true });
 
   render();
   return {
