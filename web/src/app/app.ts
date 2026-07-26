@@ -17,6 +17,7 @@ import { CameraRig, CHAPTER_KEYS } from "./CameraRig";
 import { setupChapters } from "./chapters";
 import { createCursor } from "./cursor";
 import { createMilkyWay } from "./MilkyWay";
+import { createPager } from "./pager";
 import { R, SkyApp } from "./SkyApp";
 
 /** 相机总进度阻尼系数（/秒），越大跟手越快 */
@@ -63,11 +64,18 @@ async function boot(): Promise<void> {
 
   const rig = new CameraRig(CHAPTER_KEYS);
 
+  // 右下角翻页器（上一章/下一章 + 当前章指示，手机与桌面通用）；
+  // 须在 setupChapters 之前创建——ScrollTrigger 建章时可能同步回调 onCameraProgress
+  const PAGER_SECTIONS = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => document.getElementById(`ch${i}`)!);
+  const PAGER_NAMES = ["序", "星野", "授时", "天人", "天球", "岁差", "对话", "尾声"] as const;
+  const pager = createPager({ sections: PAGER_SECTIONS, names: PAGER_NAMES });
+
   // 相机总进度：目标值由章节 ScrollTrigger 上报，当前值在渲染循环中阻尼趋近
   let camTarget = 0;
   let camCurrent = 0;
   const { chapters } = setupChapters(sky, (g) => {
     camTarget = g;
+    pager.setCurrent(Math.min(Math.floor(g), PAGER_NAMES.length - 1));
   });
 
   sky.start((dt) => {
