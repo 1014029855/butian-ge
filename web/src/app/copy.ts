@@ -4,7 +4,7 @@
  * 导出契约（章节模块只按此形状消费，不得依赖具体文案文本）：
  *   - COPY：导出名固定，key 固定为 "ch1" ~ "ch8"，
  *     每条结构固定为 ChapterCopy（见下），经 ChapterCtx.copy 注入章节模块；
- *   - CH2_QUESTS：ch2「循诗寻星」游戏段的四道题目（见文件下方注释）；
+ *   - CH2_QUESTS：ch2「寻星令」游戏段题库（一局 10 题三种题型混合，见文件下方注释）；
  *   - CH4_STOPS：ch4「走进紫微垣」五站巡游的站点表（见文件下方注释）；
  *   - CREDITS：ch8 致谢页用，形状 { heading, groups: [{ title, lines[] }] }。
  * 修改文案时保持上述形状不变。
@@ -118,48 +118,133 @@ export const COPY: Record<string, ChapterCopy> = {
 };
 
 /**
- * ch2「循诗寻星」游戏段题目表（供 chapters/ch2.ts 消费，从易到难排序）。
+ * ch2「寻星令」游戏段题库（供 chapters/ch2.ts 消费）。
+ *
+ * 一局 10 题、三种题型混合（寻星 4 · 闪现 3 · 四选一 3），ch2 每局开局
+ * 洗牌重排（题型配比不变）。target 均为 asterisms.json 实际星官键名，
+ * 已逐一核对；闪现与选择题目标从 309 星官里挑辨识度高的亮星/名官。
  *
  * 每题字段：
  *   - key：题目 id 兼展示名（段3 回顾行列出的就是它）；
+ *   - type：题型——
+ *       seek   寻星：按提示在天空中找到目标星官并点击；
+ *       flash  闪现：目标高亮 1.5s 后熄灭，凭记忆点回；
+ *       choice 四选一：卡面给星官名，四个选项文本（诗句/描述混搭）点正确项；
  *   - target：asterisms.json 的星官键名——拾取判定（PickPayload.info.name）
  *     与点亮（setGroupProgress）都以此为准；
- *   - hint：题目卡提示语（一句白话）；
- *   - plain：答对后的一句白话释义。
+ *   - hint：题目卡提示语（flash 题型强调「只看一瞬」，choice 题型为设问句）；
+ *   - plain：答对后的一句白话释义；
+ *   - options / answer：仅 choice 题型——四个选项文本与正确项下标；
+ *     选项中的诗句为《步天歌》繁体原文摘句（与 poem.json 一致），
+ *     干扰项取邻近/易混星官的诗句或描述。
  * 答对后展示的诗句不在此列：ch2 运行时 fetch /data/poem.json，
  * 按 target 查 { text, from }（数据为繁体原文，保持原样引用）。
  */
+export type Ch2QuestType = "seek" | "flash" | "choice";
+
 export interface Ch2Quest {
   key: string;
+  type: Ch2QuestType;
   target: string;
   hint: string;
   plain: string;
+  /** 仅 choice 题型：四个选项文本（诗句/描述混搭） */
+  options?: readonly string[];
+  /** 仅 choice 题型：正确项在 options 中的下标 */
+  answer?: number;
 }
 
 export const CH2_QUESTS: readonly Ch2Quest[] = [
   {
     key: "北斗",
+    type: "seek",
     target: "北斗",
     hint: "找到那把勺子——七颗星连成的斗，就挂在北天。",
     plain: "北斗七星：天帝的车驾，斗柄所指，即是四方与四时。",
   },
   {
-    key: "勾陈",
-    target: "勾陈",
-    hint: "找到今夜的正北极——紫微垣中，北极星所在的那一组。",
-    plain: "勾陈六星形如钩，勾陈一就是当代北极星。",
-  },
-  {
     key: "天狼",
+    type: "seek",
     target: "天狼",
     hint: "找到全天最亮的星——南方低空，耀眼夺目的那一颗。",
     plain: "天狼是全天第一亮星，在井宿之野独坐，古人以它主侵掠。",
   },
   {
+    key: "勾陈",
+    type: "flash",
+    target: "勾陈",
+    hint: "只看一瞬——记住紫微垣中、今夜北极星所在的那一组，它随即隐去。",
+    plain: "勾陈六星形如钩，勾陈一就是当代北极星。",
+  },
+  {
+    key: "北极",
+    type: "choice",
+    target: "北极",
+    hint: "「北极」——四句之中，哪一句说的是它？",
+    options: [
+      "「中元北極紫微宮，北極五星在其中」",
+      "「北斗之宿七星明，第一主帝名樞精」",
+      "帝之后妃的车驾，形如弯钩，其最亮的一颗是今夜北极星。",
+      "天帝的车驾：斗柄所指，即是四方与四时。",
+    ],
+    answer: 0,
+    plain: "北极五星：太子、帝、庶子、后宫、天枢——天皇一家，以星列位。",
+  },
+  {
     key: "织女",
+    type: "seek",
     target: "织女",
     hint: "找到织女——银河西岸，与牵牛隔河相望的亮星。",
     plain: "织女三星，七夕故事的主角，一万年后将继任北极星。",
+  },
+  {
+    key: "河鼓",
+    type: "flash",
+    target: "河鼓",
+    hint: "只看一瞬——记住银河东岸的牵牛三星，它随即隐去。",
+    plain: "河鼓三星即牵牛，与织女隔河相望，七夕的故事由此而来。",
+  },
+  {
+    key: "昴宿",
+    type: "choice",
+    target: "昴宿",
+    hint: "「昴宿」——四句之中，哪一句说的是它？",
+    options: [
+      "「牛上直建三河鼓，鼓上三星號織女」",
+      "「七星一聚實不少，阿西月東各一星」",
+      "「三星中央色最深，下有積卒共十二」",
+      "银河西岸的亮星官，七夕故事的主角。",
+    ],
+    answer: 1,
+    plain: "昴宿七星聚作一团，即西方白虎的昴星团，民间呼为七姊妹。",
+  },
+  {
+    key: "心宿",
+    type: "seek",
+    target: "心宿",
+    hint: "找到苍龙之心——东方三星相依，中央那颗最红，名叫大火。",
+    plain: "心宿三星：中央「大火」色最红，古人观大火以候寒暑。",
+  },
+  {
+    key: "北落师门",
+    type: "flash",
+    target: "北落师门",
+    hint: "只看一瞬——记住南方孤悬的那颗亮星，它随即隐去。",
+    plain: "北落师门：羽林军南门外独守的亮星，秋夜南天最醒目的一颗。",
+  },
+  {
+    key: "老人",
+    type: "choice",
+    target: "老人",
+    hint: "「老人」——四句之中，哪一句说的是它？",
+    options: [
+      "「左畔九個彎弧弓，一矢擬射頑狼胸」",
+      "「邱下一狼光蓬茸」",
+      "羽林军南门之外，一颗独守的亮星。",
+      "「有個老人南極中，春秋出入壽無窮」",
+    ],
+    answer: 3,
+    plain: "老人星：南极仙翁，南天第二亮星，古人以它主寿安。",
   },
 ];
 

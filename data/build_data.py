@@ -60,7 +60,7 @@ def fetch(name: str) -> bytes:
 
 
 def load_hyg() -> dict[int, dict]:
-    """HIP -> {ra(deg), dec(deg), mag, ci(B-V 色指数, 缺失为 None)}。兼容 gzip 与纯文本 CSV。"""
+    """HIP -> {ra(deg), dec(deg), mag, ci(B-V 色指数), dist(光年), 缺失均为 None}。兼容 gzip 与纯文本 CSV。"""
     raw = fetch("hyg_v44.csv.gz")
     if raw[:2] == b"\x1f\x8b":
         raw = gzip.decompress(raw)
@@ -76,6 +76,7 @@ def load_hyg() -> dict[int, dict]:
                 "dec": float(row["dec"]),
                 "mag": float(row["mag"]),
                 "ci": parse_ci(row.get("ci")),
+                "dist": parse_dist(row.get("dist")),
             }
         except (ValueError, KeyError):
             continue
@@ -91,6 +92,22 @@ def parse_ci(v) -> float | None:
         return float(s)
     except ValueError:
         return None
+
+
+def parse_dist(v) -> float | None:
+    """距离（秒差距 → 光年）；空串、非法值、非正数或超出 0.5~3000 光年返回 None
+    （HYG 以 dist=100000 pc 作缺失占位，一并剔除；不影响该星取舍）。"""
+    s = (v or "").strip()
+    if not s:
+        return None
+    try:
+        pc = float(s)
+    except ValueError:
+        return None
+    if pc <= 0:
+        return None
+    ly = pc * 3.26156
+    return ly if 0.5 <= ly <= 3000.0 else None
 
 
 def parse_fab_star_names(raw: str) -> dict[int, str]:
@@ -222,6 +239,7 @@ def main() -> None:
         {"hip": hip, "ra": round(hyg[hip]["ra"], 5), "dec": round(hyg[hip]["dec"], 5),
          "mag": round(hyg[hip]["mag"], 2),
          "ci": round(hyg[hip]["ci"], 2) if hyg[hip]["ci"] is not None else None,
+         "dist": round(hyg[hip]["dist"], 1) if hyg[hip]["dist"] is not None else None,
          "name": star_names.get(hip)}
         for hip in sorted(keep)
     ]

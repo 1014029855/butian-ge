@@ -1,5 +1,5 @@
 /**
- * ch2 星野漫游（重构版）：「点亮 = 被命名」三段叙事 + 循诗寻星游戏。
+ * ch2 星野漫游（重构版）：「点亮 = 被命名」三段叙事 + 段2「寻星令」游戏。
  *
  * 三段结构（章内局部进度 p，总行程不变）：
  *
@@ -10,16 +10,32 @@
  *       每句对应星官随句生长点亮（SEG1_LINES，诗句为简体转写，出处见各行注释）；
  *     - p∈[0.30,0.35) 三垣四象全部组拉满（全景齐亮）+ 点题句（copy.body[1]）。
  *
- *   段2 循诗寻星  p∈[0.35, 0.80)（游戏段，题目见 copy.ts 的 CH2_QUESTS）
- *     - 题目卡固定底部中央；进入每题：目标组熄灭（setGroupProgress 0），拾取开；
- *     - 点对（PickPayload.info.name === target）：目标组生长点亮 + bloom 短促脉冲
- *       （1.6 → 0.78，0.8s gsap 缓回）+ 题目卡翻页（诗句 text/出处 from 运行时
- *       查 /data/poem.json，白话释义 plain 来自 CH2_QUESTS）→ 1.2s 后切下一题；
- *     - 点错 1 次：屏幕边缘出现方向箭头（目标质心投影，越界钳在边缘，atan2 指向）；
- *     - 点错 2 次或 20s 无操作：目标质心处浮现淡金光圈（Sprite 环，
- *       addSkyObject 挂载、rotateWithSky 默认）；
- *     - 「跳过」小字按钮（pointer-events:auto）：点亮目标并直接进下一题；
- *     - 提前滚过 0.80 未答完：剩余题目自动点亮，题目卡显示「星空已全部为你点亮」。
+ *   段2 寻星令  p∈[0.35, 0.80)（游戏段，题库见 copy.ts 的 CH2_QUESTS）
+ *     一局 10 题三种题型混合（每局开局洗牌重排，题型配比 寻星4/闪现3/四选一3）：
+ *       a) 寻星 seek：题卡给提示，目标组熄灭待寻（setGroupProgress 0），点到即答对；
+ *       b) 闪现 flash：目标组高亮 1.5s 后熄灭（拉回 0），凭记忆点回；
+ *       c) 四选一 choice：卡面给星官名 + 四个选项文本（诗句/描述混搭，
+ *          选项按钮 pointer-events:auto），点正确项；天空点击本题不判定。
+ *     生命：3 心（右上 HUD，朱砂小方块）。答错（点错星/点错选项）或超时扣 1，
+ *       心尽提前结算（未点亮的星官保持熄灭——星空只留你赢下的）。
+ *     倒计时：每题独立，前 5 题 12s、后 5 题 8s（题卡顶部细条，金→朱砂随时间
+ *       变色）；超时此题作废扣 1 心、不得分、断连击，直接进下一题。
+ *     连击：连续答对倍率 1→1.5→2→3（第 4 连击起封顶 ×3）；答对得分 =
+ *       1000×倍率（星雨双倍期间再 ×2）。满 5 连击触发「星雨」10s：bloom 提升
+ *       （0.78→1.35）+ 分数双倍 + 一颗 CSS 流星掠过 + 大字「星雨」；之后每再
+ *       满 5 连击（10）复触发。
+ *     即时反馈：答对=金环爆闪放大（Sprite 环 gsap 放大淡出）+ 分数飘字（+N，
+ *       DOM 上浮消散）+ 高音拨弦；答错/超时=画面四角红闪 0.3s + 低音拨弦。
+ *       音效模块内嵌（懒建 AudioContext + Karplus-Strong 拨弦，总增益 0.12
+ *       ≤0.15，与环境音开关无关；exit 时 suspend）。
+ *     提示升级（保留旧行为）：点错 1 次出方向箭头（目标质心投影，越界钳边缘，
+ *       atan2 指向）；点错 2 次或濒临超时（剩余 ≤4s）出淡金光圈（Sprite 环，
+ *       addSkyObject 挂载）；choice 题型不出天空提示。
+ *     「跳过」小字按钮：点亮目标直接进下一题——不得分、不扣心、不断连击。
+ *     结算卡：总分/用时/正确数/评级（甲乙丙，阈值写明）/一句评语/localStorage
+ *       最高分对比（新纪录标记「史上最佳」）/「再来一局」（洗牌重置全部状态开
+ *       新局）/「进入星野」（平滑滚到段3）。提前滚过 0.80 未打完：剩余题目自动
+ *       补亮并直接结算，结算卡在探索段停留 4.5s 后自动让位。
  *
  *   段3 自由探索  p∈[0.80, 1]
  *     - 全图点亮（未亮组补 1），「现在，把星空交给你」面板 + 回顾小字，拾取开，
@@ -27,11 +43,13 @@
  *
  * 状态机与滚动进度 p 的关系（幂等、双向回滚正确）：
  *   - update(p) 只做段归属判断（ch2SegmentOf）与段内连续量（段1 的生长进度、
- *     DOM 显隐微调）；答题推进全部走事件（onPick / 跳过 / 计时器）；
+ *     DOM 显隐微调）；答题推进全部走事件（onPick / 选项 / 跳过 / 倒计时）；
  *   - 段切换（onSegEnter）负责一次性现场重建：进答题段按「已答亮 / 当前灭」
- *     重放星空与卡片；离开答题段暂停计时、答对翻页中的题立即结算；
+ *     重放星空与卡片、按 remainMs 恢复倒计时；离开答题段暂停倒计时与闪现、
+ *     答对翻页中的题立即结算（settleReveal）、星雨收束；
  *   - enter() 以最近一次 p 调 applyProgress 重放现场（ScrollTrigger 随后
- *     还会补一次 onUpdate），exit() 置 seg=-1 强制重进时重建。
+ *     还会补一次 onUpdate），exit() 全清理（计时器/飘字/特效/AudioContext
+ *     挂起）并置 seg=-1 强制重进时重建。
  *
  * 相机：段1 用 frame(dt) 钩子做脚本注视巡游（当前句星官方向，权重阻尼到
  *   0.85、朝向 slerp 平滑切换，离开段1 自动归零释放）。frame 钩子由 app.ts
@@ -46,16 +64,18 @@
  *     北斗 7星 ra≈186.0 dec≈56.5   勾陈 6星 ra≈269.6 dec≈86.5
  *     天狼 1星 ra≈101.3 dec≈-16.7  织女 3星 ra≈280.5 dec≈38.7
  *     北极 5星 ra≈218.6 dec≈76.8   心宿 3星 ra≈247.2 dec≈-26.8
- *     河鼓 3星 ra≈297.7 dec≈8.6
+ *     河鼓 3星 ra≈297.7 dec≈8.6    昴宿 7星 ra≈56.6 dec≈24.2
+ *     北落师门 1星 ra≈344.4 dec≈-29.6   老人 1星 ra≈96.0 dec≈-52.7
  *
  * 样式：模块内注入 <style>（Labels.ts 同款守卫），类名 ch2- 前缀；
- * 面板描金双细线（外框 + ::before 内压 hairline）对齐 app.css 的 .chapter-panel。
+ * 面板描金双细线（外框 + ::before 内压 hairline）对齐 app.css 的 .chapter-panel；
+ * 朱砂色取自 app.css 的 .seal 渐变（#b1402f → #8e2f22）。
  */
 import * as THREE from "three";
 import { gsap } from "gsap";
 import type { Chapter, ChapterCtx } from "../chapters";
 import { gazeQuat } from "../CameraRig";
-import { CH2_QUESTS } from "../copy";
+import { CH2_QUESTS, type Ch2Quest, type Ch2QuestType } from "../copy";
 import { radecToVec3 } from "../../sky3d/coords";
 import { dataUrl } from "../../sky3d/dataUrl";
 import type { PickPayload } from "../SkyApp";
@@ -72,8 +92,18 @@ const SEG1_LINES_END = 0.3;
 /** 五句行数（与 SEG1_LINES 一致，单测守护） */
 export const CH2_SEG1_LINE_COUNT = 5;
 
-/** 无操作多少秒后升级为光圈提示 */
-export const CH2_IDLE_HINT_SECONDS = 20;
+/** 一局题数（与 CH2_QUESTS 长度一致，单测守护） */
+export const CH2_ROUND_SIZE = 10;
+/** 生命上限（朱砂小方块数） */
+export const CH2_MAX_HEARTS = 3;
+/** 每题倒计时：前 5 题 12s、后 5 题 8s */
+export const CH2_TIME_LIMIT_EARLY_S = 12;
+export const CH2_TIME_LIMIT_LATE_S = 8;
+/** 濒临超时阈值：剩余 ≤ 4s 升级为淡金光圈提示（seek/flash 题型） */
+export const CH2_URGENT_HINT_SECONDS = 4;
+/** 评级阈值（总分）：甲 ≥ 20000 · 乙 ≥ 12000 · 丙 未及乙等 */
+export const CH2_GRADE_JIA = 20000;
+export const CH2_GRADE_YI = 12000;
 
 const SEG_POEM = 0;
 const SEG_QUIZ = 1;
@@ -83,18 +113,60 @@ function clamp01(v: number): number {
   return Math.min(Math.max(v, 0), 1);
 }
 
-/** 段归属：0=诗亮星空 1=循诗寻星 2=自由探索（越界输入自动钳制） */
+/** 段归属：0=诗亮星空 1=寻星令 2=自由探索（越界输入自动钳制） */
 export function ch2SegmentOf(p: number): 0 | 1 | 2 {
   if (p < CH2_SEG1_END) return SEG_POEM;
   if (p < CH2_SEG2_END) return SEG_QUIZ;
   return SEG_EXPLORE;
 }
 
-/** 提示升级计数：点错 1 次 → 方向箭头；点错 2 次或 20s 无操作 → 淡金光圈 */
-export function ch2HintLevel(misses: number, idleSeconds: number): 0 | 1 | 2 {
-  if (misses >= 2 || idleSeconds >= CH2_IDLE_HINT_SECONDS) return 2;
+/**
+ * 提示升级计数：点错 1 次 → 方向箭头；点错 2 次或濒临超时（剩余 ≤4s）→ 淡金光圈。
+ * remainingSeconds 传本题倒计时剩余秒数。
+ */
+export function ch2HintLevel(misses: number, remainingSeconds: number): 0 | 1 | 2 {
+  if (misses >= 2 || remainingSeconds <= CH2_URGENT_HINT_SECONDS) return 2;
   if (misses >= 1) return 1;
   return 0;
+}
+
+/** 第 index 题（0 起）的倒计时秒数：前 5 题 12s、后 5 题 8s */
+export function ch2TimeLimit(index: number): number {
+  return index < CH2_ROUND_SIZE / 2 ? CH2_TIME_LIMIT_EARLY_S : CH2_TIME_LIMIT_LATE_S;
+}
+
+/**
+ * 连击倍率：本次答对后的连击数 streak（≥1）→ 1 / 1.5 / 2 / 3（第 4 连击起封顶）。
+ */
+export function ch2ComboMultiplier(streak: number): number {
+  if (streak <= 1) return 1;
+  if (streak === 2) return 1.5;
+  if (streak === 3) return 2;
+  return 3;
+}
+
+/** 答对得分：1000 × 连击倍率（星雨双倍期间再 ×2） */
+export function ch2ScoreFor(streak: number, rainActive: boolean): number {
+  return Math.round(1000 * ch2ComboMultiplier(streak)) * (rainActive ? 2 : 1);
+}
+
+/** 评级：甲 ≥ CH2_GRADE_JIA · 乙 ≥ CH2_GRADE_YI · 丙 未及乙等 */
+export function ch2Grade(score: number): "甲" | "乙" | "丙" {
+  if (score >= CH2_GRADE_JIA) return "甲";
+  if (score >= CH2_GRADE_YI) return "乙";
+  return "丙";
+}
+
+/** Fisher-Yates 洗牌（返回新数组，不动原数组；rand 可注入便于单测） */
+export function ch2Shuffle<T>(arr: readonly T[], rand: () => number): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const a = out[i]!;
+    out[i] = out[j]!;
+    out[j] = a;
+  }
+  return out;
 }
 
 /**
@@ -126,10 +198,18 @@ const SKY_R = 100;
 const BLOOM_BASE = 0.78;
 /** 答对 bloom 脉冲峰值 */
 const BLOOM_PEAK = 1.6;
+/** 星雨期间 bloom 提升到的强度 */
+const RAIN_BLOOM = 1.35;
+/** 星雨持续时长（ms）：bloom 提升 + 分数双倍 */
+const RAIN_MS = 10_000;
+/** 闪现题型：目标高亮时长（ms），随后拉回 0 */
+const FLASH_MS = 1500;
 /** 答对翻页停留时长（ms），随后切下一题 */
 const REVEAL_HOLD_MS = 1200;
-/** 滚过 0.80 自动补亮后，完成卡停留时长（ms） */
-const DONE_CARD_HOLD_MS = 3000;
+/** 滚过 0.80 自动结算后，结算卡在探索段停留时长（ms） */
+const RESULT_CARD_HOLD_MS = 4500;
+/** localStorage 最高分键 */
+const BEST_KEY = "ch2-xunxingling-best";
 
 /** 段1 五句：text 为简体转写（poem.json 原文为繁体），groups 为该句点亮的星官 */
 const SEG1_LINES: readonly { text: string; label: string; groups: readonly string[] }[] = [
@@ -177,10 +257,27 @@ const TARGET_DIRS: Record<string, { ra: number; dec: number; ring: number }> = {
   北极: { ra: 218.6, dec: 76.8, ring: 10 },
   心宿: { ra: 247.2, dec: -26.8, ring: 8 },
   河鼓: { ra: 297.7, dec: 8.6, ring: 8 },
+  昴宿: { ra: 56.6, dec: 24.2, ring: 10 },
+  北落师门: { ra: 344.4, dec: -29.6, ring: 5 },
+  老人: { ra: 96.0, dec: -52.7, ring: 5 },
 };
 
-/** 题目序号展示（寻星 · 其一 …） */
-const ORDINALS = ["其一", "其二", "其三", "其四"];
+/** 题目序号展示（寻星令 · 其三 / 10） */
+const CN_NUMERALS = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+
+/** 题型徽标 */
+const TYPE_LABELS: Record<Ch2QuestType, string> = {
+  seek: "寻星",
+  flash: "闪现",
+  choice: "四选一",
+};
+
+/** 评级评语（结算卡一句） */
+const GRADE_NOTES: Record<"甲" | "乙" | "丙", string> = {
+  甲: "仰观天文，俯察地理——这片星野，你已得了古人真传。",
+  乙: "星野渐熟。再循一遍歌，全天星官皆可指认。",
+  丙: "莫急。抬头多看几夜，星星自会认你。",
+};
 
 // ---------------------------------------------------------------- 样式（ch2- 前缀，Labels.ts 同款注入守卫）
 
@@ -262,7 +359,42 @@ const CH2_CSS = `
   background: rgba(13, 13, 17, 0.5);
 }
 
-/* ---- 段2：题目卡（底部中央，卡面不拦截点击，仅「跳过」可点） ---- */
+/* ---- 段2 寻星令：HUD（右上描金小件，不拦截点击） ---- */
+.ch2-hud {
+  position: absolute; right: 3.2vw; top: 4.5vh;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  opacity: 0; transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+.ch2-hud.on { opacity: 1; }
+.ch2-hearts { display: flex; gap: 6px; padding: 2px; }
+.ch2-hearts i {
+  width: 14px; height: 14px; border-radius: 3px;
+  background: linear-gradient(150deg, #b1402f 0%, #8e2f22 100%);
+  box-shadow: 0 0 8px rgba(142, 47, 34, 0.55), inset 0 0 3px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.3s ease, transform 0.3s ease, background 0.3s ease;
+}
+.ch2-hearts i.off {
+  background: none;
+  border: 1px solid rgba(142, 47, 34, 0.55);
+  box-shadow: none;
+  opacity: 0.45; transform: scale(0.85);
+}
+.ch2-hud-item {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 10px;
+  background: rgba(13, 13, 17, 0.55);
+  border: 1px solid rgba(175, 145, 95, 0.28); border-radius: 6px;
+  backdrop-filter: blur(3px);
+}
+.ch2-hud-item label { font-size: 10px; letter-spacing: 0.3em; color: #af915f; }
+.ch2-hud-item b {
+  font-family: var(--font-display, "Songti SC", serif);
+  font-size: 16px; font-weight: 400; color: #fce1b6;
+}
+.ch2-hud-combo.rain b { color: #c9a227; text-shadow: 0 0 10px rgba(201, 162, 39, 0.65); }
+
+/* ---- 段2：题目卡（底部中央，卡面不拦截点击，仅跳过/选项/按钮可点） ---- */
 .ch2-quest {
   left: 50%; bottom: 4.5vh;
   width: min(470px, 88vw);
@@ -274,8 +406,22 @@ const CH2_CSS = `
   from { opacity: 0; transform: translate(-50%, 10px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
-.ch2-quest-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-.ch2-quest-no { font-size: 11px; letter-spacing: 0.42em; color: #fce1b6; opacity: 0.55; }
+.ch2-timer {
+  position: absolute; top: 0; left: 12px; right: 12px; height: 3px;
+  border-radius: 2px; background: rgba(252, 225, 182, 0.12);
+  overflow: hidden; transition: opacity 0.4s ease;
+}
+.ch2-timer i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #c9a227, #e8c85a); }
+.ch2-quest.mode-verse .ch2-timer,
+.ch2-quest.mode-result .ch2-timer { opacity: 0; }
+.ch2-quest-meta { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ch2-quest-no { flex: 1; font-size: 11px; letter-spacing: 0.42em; color: #fce1b6; opacity: 0.55; }
+.ch2-quest-type {
+  flex: none;
+  font-size: 11px; letter-spacing: 0.3em; text-indent: 0.3em; color: #c9a227;
+  border: 1px solid rgba(201, 162, 39, 0.35); border-radius: 4px;
+  padding: 2px 6px;
+}
 .ch2-skip {
   pointer-events: auto;
   background: none; border: none; padding: 2px 4px;
@@ -292,18 +438,80 @@ const CH2_CSS = `
 }
 .ch2-verse-from { font-size: 12px; letter-spacing: 0.14em; color: #c9a227; margin-top: 6px; }
 .ch2-verse-plain { font-size: 13px; line-height: 1.9; opacity: 0.85; margin-top: 8px; }
-.ch2-quest-done {
-  display: none;
-  font-family: var(--font-display, "Songti SC", serif);
-  font-size: 16px; letter-spacing: 0.2em; color: #c9a227;
-  text-align: center; padding: 6px 0 2px;
-}
 .ch2-quest.mode-verse .ch2-quest-hint { display: none; }
 .ch2-quest.mode-verse .ch2-quest-verse { display: block; }
-.ch2-quest.mode-verse .ch2-skip,
-.ch2-quest.mode-done .ch2-skip { visibility: hidden; }
-.ch2-quest.mode-done .ch2-quest-hint { display: none; }
-.ch2-quest.mode-done .ch2-quest-done { display: block; }
+.ch2-quest.mode-verse .ch2-skip { visibility: hidden; }
+
+/* ---- 段2：四选一选项（可点） ---- */
+.ch2-options { display: none; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ch2-quest.mode-choice .ch2-options { display: flex; }
+.ch2-opt {
+  pointer-events: auto;
+  text-align: left;
+  background: rgba(252, 225, 182, 0.05);
+  border: 1px solid rgba(175, 145, 95, 0.35); border-radius: 6px;
+  padding: 9px 12px;
+  font-family: var(--font-body, "PingFang SC", sans-serif);
+  font-size: 13.5px; line-height: 1.7; color: #f6e8d8;
+  cursor: pointer;
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.15s ease;
+}
+.ch2-opt:hover:not(:disabled) {
+  border-color: rgba(201, 162, 39, 0.75);
+  background: rgba(201, 162, 39, 0.1);
+  transform: translateX(2px);
+}
+.ch2-opt.wrong {
+  border-color: rgba(142, 47, 34, 0.8);
+  background: rgba(142, 47, 34, 0.12);
+  color: rgba(246, 232, 216, 0.4);
+  cursor: default;
+}
+
+/* ---- 段2：结算卡 ---- */
+.ch2-result { display: none; text-align: center; }
+.ch2-quest.mode-result .ch2-result { display: block; }
+.ch2-quest.mode-result .ch2-quest-meta,
+.ch2-quest.mode-result .ch2-quest-hint,
+.ch2-quest.mode-result .ch2-options { display: none; }
+.ch2-result h3 {
+  font-family: var(--font-display, "Songti SC", serif);
+  font-size: 15px; font-weight: 400; letter-spacing: 0.4em; text-indent: 0.4em;
+  color: #fce1b6; opacity: 0.85; margin-bottom: 10px;
+}
+.ch2-result-grade {
+  font-family: var(--font-display, "Songti SC", serif);
+  font-size: 44px; line-height: 1.1; color: #c9a227;
+  text-shadow: 0 0 22px rgba(201, 162, 39, 0.4);
+}
+.ch2-result-score { margin-top: 2px; font-size: 13px; letter-spacing: 0.2em; color: #fce1b6; }
+.ch2-result-score b {
+  font-family: var(--font-display, "Songti SC", serif);
+  font-size: 26px; font-weight: 400; margin-left: 6px;
+}
+.ch2-result-line { margin-top: 6px; font-size: 12.5px; letter-spacing: 0.14em; opacity: 0.85; }
+.ch2-result-th { margin-top: 4px; font-size: 11px; letter-spacing: 0.12em; color: #af915f; }
+.ch2-result-note { margin-top: 8px; font-size: 13px; line-height: 1.9; color: #f6e8d8; }
+.ch2-result-best { margin-top: 8px; font-size: 12.5px; letter-spacing: 0.14em; color: #fce1b6; }
+.ch2-result-best b { color: #c9a227; font-weight: 400; }
+.ch2-best-badge {
+  display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; letter-spacing: 0.2em; color: #f6e8d8;
+  background: linear-gradient(150deg, #b1402f 0%, #8e2f22 100%);
+  box-shadow: 0 0 12px rgba(142, 47, 34, 0.5);
+}
+.ch2-result-btns { margin-top: 14px; display: flex; justify-content: center; gap: 12px; }
+.ch2-btn {
+  pointer-events: auto;
+  font-family: var(--font-body, "PingFang SC", sans-serif);
+  font-size: 13px; letter-spacing: 0.24em; text-indent: 0.12em;
+  padding: 8px 18px; border-radius: 6px; cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+.ch2-btn-gold { background: rgba(201, 162, 39, 0.14); border: 1px solid rgba(201, 162, 39, 0.6); color: #fce1b6; }
+.ch2-btn-gold:hover { background: rgba(201, 162, 39, 0.28); box-shadow: 0 0 16px rgba(201, 162, 39, 0.35); }
+.ch2-btn-ghost { background: none; border: 1px solid rgba(175, 145, 95, 0.4); color: #af915f; }
+.ch2-btn-ghost:hover { color: #fce1b6; border-color: rgba(201, 162, 39, 0.6); }
 
 /* ---- 段2：方向箭头（屏幕边缘指向目标） ---- */
 .ch2-arrow {
@@ -322,6 +530,66 @@ const CH2_CSS = `
   animation: ch2ArrowPulse 1.2s ease-in-out infinite;
 }
 @keyframes ch2ArrowPulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; } }
+
+/* ---- 段2：答对分数飘字（上浮消散） ---- */
+.ch2-floats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ch2-float {
+  position: absolute; left: 50%; bottom: 26vh;
+  transform: translateX(-50%);
+  font-family: var(--font-display, "Songti SC", serif);
+  font-size: 26px; color: #e8c85a;
+  text-shadow: 0 0 14px rgba(201, 162, 39, 0.65), 0 2px 8px rgba(13, 13, 17, 0.9);
+  animation: ch2FloatUp 1.15s ease-out forwards;
+}
+@keyframes ch2FloatUp {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.85); }
+  18% { opacity: 1; transform: translate(-50%, 0) scale(1.06); }
+  100% { opacity: 0; transform: translate(-50%, -72px) scale(1); }
+}
+
+/* ---- 段2：答错四角红闪（0.3s） ---- */
+.ch2-redflash {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background:
+    radial-gradient(42vw 42vh at 0% 0%, rgba(142, 47, 34, 0.5), transparent 70%),
+    radial-gradient(42vw 42vh at 100% 0%, rgba(142, 47, 34, 0.5), transparent 70%),
+    radial-gradient(42vw 42vh at 0% 100%, rgba(142, 47, 34, 0.5), transparent 70%),
+    radial-gradient(42vw 42vh at 100% 100%, rgba(142, 47, 34, 0.5), transparent 70%);
+}
+.ch2-redflash.on { animation: ch2Red 0.3s ease-out; }
+@keyframes ch2Red { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---- 段2：星雨（流星 + 大字） ---- */
+.ch2-meteor {
+  position: absolute; top: 12vh; left: 78vw;
+  width: 180px; height: 2px;
+  background: linear-gradient(90deg, rgba(252, 225, 182, 0.95), transparent);
+  transform: rotate(-32deg); transform-origin: left center;
+  filter: drop-shadow(0 0 6px rgba(252, 225, 182, 0.8));
+  opacity: 0; pointer-events: none;
+}
+.ch2-meteor.on { animation: ch2Meteor 1.15s cubic-bezier(0.3, 0.6, 0.6, 1) forwards; }
+@keyframes ch2Meteor {
+  0% { opacity: 0; transform: rotate(-32deg) translateX(0); }
+  8% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(-32deg) translateX(-70vw); }
+}
+.ch2-rain-title {
+  position: absolute; left: 50%; top: 34vh;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display, "Songti SC", serif);
+  font-size: clamp(40px, 7vh, 64px);
+  letter-spacing: 0.5em; text-indent: 0.5em; color: #fce1b6;
+  text-shadow: 0 0 30px rgba(201, 162, 39, 0.75), 0 0 60px rgba(201, 162, 39, 0.4);
+  opacity: 0; pointer-events: none;
+}
+.ch2-rain-title.on { animation: ch2RainTitle 2.2s ease forwards; }
+@keyframes ch2RainTitle {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -56%) scale(1.04); }
+}
 
 /* ---- 段3：自由探索面板 ---- */
 .ch2-explore { left: 6vw; bottom: 10vh; max-width: 400px; }
@@ -350,6 +618,62 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ---------------------------------------------------------------- 音效（懒建 AudioContext + Karplus-Strong 拨弦）
+
+let actx: AudioContext | null = null;
+let masterGain: GainNode | null = null;
+
+/** 懒建音频管线：总增益 0.12（≤0.15，克制）；与环境音开关相互独立 */
+function ensureAudio(): void {
+  if (typeof window === "undefined") return;
+  const AC =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AC) return;
+  if (!actx) {
+    actx = new AC();
+    masterGain = actx.createGain();
+    masterGain.gain.value = 0.12;
+    masterGain.connect(actx.destination);
+  }
+  if (actx.state === "suspended") void actx.resume();
+}
+
+/**
+ * Karplus-Strong 拨弦：噪声激励进环形缓冲，逐样本低通反馈出弦音衰减。
+ * 答对高音（A5）、答错/超时低音（E3），一拨即收，不铺底。
+ */
+function pluck(freq: number, dur: number, gain: number): void {
+  ensureAudio();
+  if (!actx || !masterGain) return;
+  const sr = actx.sampleRate;
+  const period = Math.max(2, Math.round(sr / freq));
+  const len = Math.floor(sr * dur);
+  const buf = actx.createBuffer(1, len, sr);
+  const out = buf.getChannelData(0);
+  const ringBuf = new Float32Array(period);
+  for (let i = 0; i < period; i++) ringBuf[i] = Math.random() * 2 - 1;
+  let idx = 0;
+  for (let i = 0; i < len; i++) {
+    const cur = ringBuf[idx]!;
+    const nxt = ringBuf[(idx + 1) % period]!;
+    ringBuf[idx] = 0.996 * 0.5 * (cur + nxt);
+    out[i] = cur * gain;
+    idx = (idx + 1) % period;
+  }
+  const src = actx.createBufferSource();
+  src.buffer = buf;
+  src.connect(masterGain);
+  src.start();
+}
+
+function pluckHigh(): void {
+  pluck(880, 0.9, 0.9); // 答对：高音拨弦
+}
+function pluckLow(): void {
+  pluck(164.8, 1.1, 1); // 答错/超时：低音拨弦
 }
 
 // ---------------------------------------------------------------- 章节工厂
@@ -390,24 +714,72 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   const finalePanel = el("div", "ch2-card ch2-finale");
   finalePanel.innerHTML = `<p class="ch2-finale-text">${escapeHtml(copy.body[1] ?? "")}</p>`;
 
-  // ---- 段2：题目卡 ----
+  // ---- 段2 寻星令：HUD（心/得分/连击，右上） ----
+  const hud = el("div", "ch2-hud");
+  hud.innerHTML = `
+    <div class="ch2-hearts"><i></i><i></i><i></i></div>
+    <div class="ch2-hud-item ch2-hud-score"><label>得分</label><b>0</b></div>
+    <div class="ch2-hud-item ch2-hud-combo"><label>连击</label><b>×1</b></div>
+  `;
+  const heartEls = Array.from(hud.querySelectorAll<HTMLElement>(".ch2-hearts i"));
+  const hudScore = hud.querySelector<HTMLElement>(".ch2-hud-score b")!;
+  const hudComboBox = hud.querySelector<HTMLElement>(".ch2-hud-combo")!;
+  const hudCombo = hud.querySelector<HTMLElement>(".ch2-hud-combo b")!;
+
+  // ---- 段2：题目卡（倒计时条 / 题干 / 选项 / 翻页诗句 / 结算） ----
   const questCard = el("div", "ch2-card ch2-quest");
   questCard.innerHTML = `
-    <div class="ch2-quest-meta"><span class="ch2-quest-no"></span><button type="button" class="ch2-skip">跳过</button></div>
+    <div class="ch2-timer"><i></i></div>
+    <div class="ch2-quest-meta">
+      <span class="ch2-quest-no"></span>
+      <span class="ch2-quest-type"></span>
+      <button type="button" class="ch2-skip">跳过</button>
+    </div>
     <p class="ch2-quest-hint"></p>
+    <div class="ch2-options"></div>
     <div class="ch2-quest-verse">
       <p class="ch2-verse-text"></p>
       <p class="ch2-verse-from"></p>
       <p class="ch2-verse-plain"></p>
     </div>
-    <p class="ch2-quest-done">星空已全部为你点亮</p>
+    <div class="ch2-result">
+      <h3>寻星令 · 结算</h3>
+      <p class="ch2-result-grade">丙</p>
+      <p class="ch2-result-score">总分<b>0</b></p>
+      <p class="ch2-result-line"></p>
+      <p class="ch2-result-th"></p>
+      <p class="ch2-result-note"></p>
+      <p class="ch2-result-best"></p>
+      <div class="ch2-result-btns">
+        <button type="button" class="ch2-btn ch2-btn-gold ch2-again">再来一局</button>
+        <button type="button" class="ch2-btn ch2-btn-ghost ch2-goto-explore">进入星野</button>
+      </div>
+    </div>
   `;
+  const timerFill = questCard.querySelector<HTMLElement>(".ch2-timer i")!;
   const questNo = questCard.querySelector<HTMLElement>(".ch2-quest-no")!;
+  const questType = questCard.querySelector<HTMLElement>(".ch2-quest-type")!;
   const questHint = questCard.querySelector<HTMLElement>(".ch2-quest-hint")!;
+  const optionsBox = questCard.querySelector<HTMLElement>(".ch2-options")!;
   const verseText = questCard.querySelector<HTMLElement>(".ch2-verse-text")!;
   const verseFrom = questCard.querySelector<HTMLElement>(".ch2-verse-from")!;
   const versePlain = questCard.querySelector<HTMLElement>(".ch2-verse-plain")!;
+  const resultGrade = questCard.querySelector<HTMLElement>(".ch2-result-grade")!;
+  const resultScore = questCard.querySelector<HTMLElement>(".ch2-result-score b")!;
+  const resultLine = questCard.querySelector<HTMLElement>(".ch2-result-line")!;
+  const resultTh = questCard.querySelector<HTMLElement>(".ch2-result-th")!;
+  const resultNote = questCard.querySelector<HTMLElement>(".ch2-result-note")!;
+  const resultBest = questCard.querySelector<HTMLElement>(".ch2-result-best")!;
   const skipBtn = questCard.querySelector<HTMLButtonElement>(".ch2-skip")!;
+  const againBtn = questCard.querySelector<HTMLButtonElement>(".ch2-again")!;
+  const gotoExploreBtn = questCard.querySelector<HTMLButtonElement>(".ch2-goto-explore")!;
+
+  // ---- 段2：特效层（飘字 / 红闪 / 流星 / 星雨大字） ----
+  const floatLayer = el("div", "ch2-floats");
+  const redflashEl = el("div", "ch2-redflash");
+  const meteorEl = el("div", "ch2-meteor");
+  const rainTitleEl = el("div", "ch2-rain-title");
+  rainTitleEl.textContent = "星雨";
 
   // ---- 段3：探索面板（body[2]）+ 回顾小字 + 提示 ----
   const explorePanel = el("div", "ch2-card ch2-explore");
@@ -444,22 +816,49 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   let seg = -1; // 当前段（-1 = 未定位，下次 applyProgress 必触发 onSegEnter）
   let lastP = 0;
 
-  let questIdx = 0; // 当前题（=== CH2_QUESTS.length 表示全部完成）
-  const solvedFlags = CH2_QUESTS.map(() => false);
-  let misses = 0; // 当前题点错次数
+  // 一局状态（resetRound 全量重置；段间往返保留，回滚幂等）
+  let deck: readonly Ch2Quest[] = CH2_QUESTS; // 本局题序（开局洗牌）
+  let questIdx = 0; // 当前题（=== deck.length 表示本局结束）
+  let solvedFlags: boolean[] = CH2_QUESTS.map(() => false); // 已点亮（答对/跳过/补亮）
+  let hearts = CH2_MAX_HEARTS;
+  let score = 0;
+  let streak = 0; // 当前连击数（答对 +1，答错/超时归零，跳过不变）
+  let correctCount = 0;
+  let misses = 0; // 当前题点错次数（仅 seek/flash 的天空点错）
   let hintLevel: 0 | 1 | 2 = 0;
-  let phase: "asking" | "revealed" | "done" = "asking";
+  let phase: "asking" | "revealed" | "over" = "asking";
 
-  type CardMode = "hidden" | "ask" | "verse" | "done";
+  // 当前题运行现场
+  let optionOrder: number[] = []; // choice 选项展示序（原下标的洗牌）
+  const wrongOpts = new Set<number>(); // choice 已点错的选项原下标
+  let flashSeen = false; // flash 本题是否已完成首次高亮（回滚重进不重播）
+  let timeLimitMs = CH2_TIME_LIMIT_EARLY_S * 1000; // 本题总时长
+  let remainMs = timeLimitMs; // 剩余（暂停/恢复用）
+  let deadlineMs = 0; // >0 = 倒计时进行中（performance.now() 刻度）
+
+  // 一局计时与纪录
+  let roundStarted = false;
+  let roundStartMs = 0;
+  let roundEndMs = 0;
+  let bestSaved = false; // localStorage 每局只写一次（fillResult 可重复渲染）
+
+  // 星雨
+  let rainActive = false;
+  let rainTimer: ReturnType<typeof setTimeout> | null = null;
+
+  type CardMode = "hidden" | "ask" | "choice" | "verse" | "result";
   let cardMode: CardMode = "hidden";
 
-  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
   let advanceTimer: ReturnType<typeof setTimeout> | null = null;
   let doneHideTimer: ReturnType<typeof setTimeout> | null = null;
   let growthTween: gsap.core.Tween | null = null;
+  let flashTween: gsap.core.Tween | null = null;
   let bloomTween: gsap.core.Tween | null = null;
+  let ringBurstTween: gsap.core.Tween | null = null;
   let unsubPick: (() => void) | null = null;
   let rafId = 0;
+  const floats = new Set<HTMLElement>();
 
   // 段1 脚本注视（frame 钩子驱动；applyCameraState 后调用不被覆写）
   let gazeW = 0; // 注视权重当前值（向目标值阻尼趋近）
@@ -470,6 +869,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   let ring: THREE.Sprite | null = null;
   let ringTarget = "";
   let ringBase = 8;
+  let ringBursting = false; // 答对爆闪播放中（tick 脉动与 renderHints 都让位）
   let ringTex: THREE.CanvasTexture | null = null;
 
   // DOM 显隐缓存（update 高频路径只在变化时碰 classList）
@@ -477,8 +877,10 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   let finaleOn = false;
   let exploreOn = false;
   let hintOn = false;
+  let hudOn = false;
   let activeLine = -2;
   let finaleWritten = false; // 段1 收尾已写过全体组（回滚离开时补一次归零）
+  let timerBarCache = ""; // 倒计时条上次写入（去抖）
 
   // ---------------------------------------------------------------- 小组件
 
@@ -507,6 +909,11 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     hintOn = on;
     hint.classList.toggle("on", on);
   }
+  function setHudOn(on: boolean): void {
+    if (hudOn === on) return;
+    hudOn = on;
+    hud.classList.toggle("on", on);
+  }
   function setActiveLine(i: number): void {
     if (activeLine === i) return;
     activeLine = i;
@@ -518,13 +925,42 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     arrowEl.classList.toggle("on", on);
     if (!on) arrowEl.style.opacity = ""; // 清掉「目标在画面内」的内联退场
   }
+  /** CSS 动画重触发（reflow 技巧，不占计时器） */
+  function restartAnim(node: HTMLElement, cls: string): void {
+    node.classList.remove(cls);
+    void node.offsetWidth;
+    node.classList.add(cls);
+  }
+
+  // ---- HUD ----
+  function fmtMult(m: number): string {
+    return `×${Number.isInteger(m) ? m : m.toFixed(1)}`;
+  }
+  function updateHUD(): void {
+    hudScore.textContent = String(score);
+    hudCombo.textContent = rainActive
+      ? `${fmtMult(ch2ComboMultiplier(streak + 1))} · 星雨双倍`
+      : fmtMult(ch2ComboMultiplier(streak + 1));
+    hudComboBox.classList.toggle("rain", rainActive);
+    heartEls.forEach((h, i) => h.classList.toggle("off", i >= hearts));
+  }
+  /** 倒计时条：宽度和色相随剩余比例（金 → 朱砂） */
+  function updateTimerBar(f: number): void {
+    const pct = (clamp01(f) * 100).toFixed(1);
+    if (pct === timerBarCache) return;
+    timerBarCache = pct;
+    timerFill.style.width = `${pct}%`;
+    const hue = Math.round(8 + 34 * clamp01(f)); // 42 金 → 8 朱砂
+    timerFill.style.background = `linear-gradient(90deg, hsl(${hue} 62% 52%), hsl(${hue} 70% 62%))`;
+  }
 
   // ---- 题目卡 ----
   function setCardMode(mode: CardMode): void {
     cardMode = mode;
     questCard.classList.toggle("on", mode !== "hidden");
     questCard.classList.toggle("mode-verse", mode === "verse");
-    questCard.classList.toggle("mode-done", mode === "done");
+    questCard.classList.toggle("mode-result", mode === "result");
+    questCard.classList.toggle("mode-choice", mode === "choice");
     if (mode !== "hidden") {
       // 翻页：重启入场动画（reflow 技巧，不占计时器；同模式换题也翻页）
       questCard.classList.remove("swap");
@@ -532,15 +968,43 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       questCard.classList.add("swap");
     }
   }
+  function fillQuestMeta(): void {
+    questNo.textContent = `寻星令 · 其${CN_NUMERALS[questIdx] ?? questIdx + 1} / ${deck.length}`;
+    const q = deck[questIdx];
+    questType.textContent = q ? TYPE_LABELS[q.type] : "";
+  }
   function showAskCard(): void {
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
     if (!q) return;
-    questNo.textContent = `寻星 · ${ORDINALS[questIdx] ?? `第${questIdx + 1}题`}`;
+    fillQuestMeta();
     questHint.textContent = q.hint;
     setCardMode("ask");
   }
+  function showChoiceCard(): void {
+    const q = deck[questIdx];
+    if (!q || q.type !== "choice") return;
+    fillQuestMeta();
+    questHint.textContent = q.hint;
+    optionsBox.innerHTML = "";
+    for (const oi of optionOrder) {
+      const text = q.options?.[oi];
+      if (text === undefined) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ch2-opt";
+      b.textContent = text;
+      if (wrongOpts.has(oi)) {
+        b.classList.add("wrong");
+        b.disabled = true;
+      } else {
+        b.addEventListener("click", () => onOptionPick(oi, b));
+      }
+      optionsBox.appendChild(b);
+    }
+    setCardMode("choice");
+  }
   function fillVerse(): void {
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
     if (!q) return;
     const entry = poem?.[q.target];
     verseText.textContent = entry?.text ?? "……";
@@ -550,6 +1014,41 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   function showVerseCard(): void {
     fillVerse();
     setCardMode("verse");
+  }
+  function fmtDuration(ms: number): string {
+    const s = Math.round(ms / 1000);
+    const m = Math.floor(s / 60);
+    return m > 0 ? `${m}分${s % 60}秒` : `${s}秒`;
+  }
+  function fillResult(): void {
+    const grade = ch2Grade(score);
+    resultGrade.textContent = grade;
+    resultScore.textContent = String(score);
+    const used = roundStarted ? Math.max(0, roundEndMs - roundStartMs) : 0;
+    resultLine.textContent = `用时 ${fmtDuration(used)} · 答对 ${correctCount} / ${deck.length}`;
+    resultTh.textContent = `甲 ≥ ${CH2_GRADE_JIA} · 乙 ≥ ${CH2_GRADE_YI} · 丙 未及乙等`;
+    resultNote.textContent = GRADE_NOTES[grade];
+    let prev = 0;
+    try {
+      prev = Number(window.localStorage.getItem(BEST_KEY) ?? 0) || 0;
+    } catch {
+      /* 隐私模式等：无最高分功能，不阻塞结算 */
+    }
+    const isRecord = score > prev;
+    if (!bestSaved) {
+      bestSaved = true;
+      if (isRecord) {
+        try {
+          window.localStorage.setItem(BEST_KEY, String(score));
+        } catch {
+          /* 同上 */
+        }
+      }
+    }
+    const best = Math.max(prev, score);
+    resultBest.innerHTML = isRecord
+      ? `刷新纪录 <b>${best}</b><span class="ch2-best-badge">史上最佳</span>`
+      : `史上最佳 <b>${best}</b>`;
   }
 
   // ---- 提示（箭头 / 淡金光圈） ----
@@ -598,29 +1097,19 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     ringTarget = "";
   }
   function renderHints(): void {
-    const inQuiz = seg === SEG_QUIZ && phase === "asking";
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
+    const inQuiz = seg === SEG_QUIZ && phase === "asking" && !!q && q.type !== "choice";
     setArrowOn(inQuiz && hintLevel >= 1);
     if (inQuiz && hintLevel >= 2 && q) ensureRing(q.target);
-    else removeRing();
+    else if (!ringBursting) removeRing(); // 爆闪播放中让位（爆闪结束自行 removeRing）
   }
 
   // ---- 计时器 ----
-  function clearIdleTimer(): void {
-    if (idleTimer !== null) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
+  function clearFlashTimer(): void {
+    if (flashTimer !== null) {
+      clearTimeout(flashTimer);
+      flashTimer = null;
     }
-  }
-  function resetIdleTimer(): void {
-    clearIdleTimer();
-    idleTimer = setTimeout(() => {
-      idleTimer = null;
-      if (seg === SEG_QUIZ && phase === "asking") {
-        hintLevel = ch2HintLevel(misses, CH2_IDLE_HINT_SECONDS); // 20s 无操作 → 光圈
-        renderHints();
-      }
-    }, CH2_IDLE_HINT_SECONDS * 1000);
   }
   function clearAdvanceTimer(): void {
     if (advanceTimer !== null) {
@@ -632,6 +1121,19 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     if (doneHideTimer !== null) {
       clearTimeout(doneHideTimer);
       doneHideTimer = null;
+    }
+  }
+  function clearRainTimer(): void {
+    if (rainTimer !== null) {
+      clearTimeout(rainTimer);
+      rainTimer = null;
+    }
+  }
+  /** 离开答题段 / exit：暂停本题倒计时（剩余时间存 remainMs，回来接着走） */
+  function pauseCountdown(): void {
+    if (phase === "asking" && deadlineMs > 0) {
+      remainMs = Math.max(0, deadlineMs - performance.now());
+      deadlineMs = 0;
     }
   }
 
@@ -646,44 +1148,182 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       onUpdate: () => ctx.sky.setGroupProgress(target, proxy.v),
     });
   }
-  function pulseBloom(): void {
+  /** bloom 统一出口：rain/脉冲共用一条 tween，互相接管不打架 */
+  const bloom = { v: BLOOM_BASE };
+  function bloomTo(target: number, dur: number): void {
     bloomTween?.kill();
-    const proxy = { v: BLOOM_PEAK };
-    ctx.sky.setBloom({ strength: proxy.v });
-    bloomTween = gsap.to(proxy, {
-      v: BLOOM_BASE,
-      duration: 0.8,
+    bloomTween = gsap.to(bloom, {
+      v: target,
+      duration: dur,
       ease: "power2.out",
-      onUpdate: () => ctx.sky.setBloom({ strength: proxy.v }),
+      onUpdate: () => ctx.sky.setBloom({ strength: bloom.v }),
       onComplete: () => {
         bloomTween = null;
       },
     });
   }
+  function pulseBloom(): void {
+    if (rainActive) return; // 星雨期间 bloom 已处高位，不叠脉冲
+    bloomTween?.kill();
+    bloom.v = BLOOM_PEAK;
+    ctx.sky.setBloom({ strength: bloom.v });
+    bloomTo(BLOOM_BASE, 0.8);
+  }
+  /** 答对金环爆闪：环放大 2.4 倍并淡出（与提示环共用同一枚 Sprite） */
+  function ringBurst(target: string): void {
+    ensureRing(target);
+    if (!ring) return;
+    ringBurstTween?.kill();
+    ringBursting = true;
+    const proxy = { s: ringBase, o: 0.95 };
+    ring.material.opacity = 0.95;
+    ringBurstTween = gsap.to(proxy, {
+      s: ringBase * 2.4,
+      o: 0,
+      duration: 0.75,
+      ease: "power2.out",
+      onUpdate: () => {
+        if (!ring) return;
+        ring.scale.set(proxy.s, proxy.s, 1);
+        ring.material.opacity = proxy.o;
+      },
+      onComplete: () => {
+        ringBurstTween = null;
+        ringBursting = false;
+        removeRing();
+      },
+    });
+  }
+  function spawnFloat(text: string): void {
+    const s = document.createElement("span");
+    s.className = "ch2-float";
+    s.textContent = text;
+    floatLayer.appendChild(s);
+    floats.add(s);
+    s.addEventListener("animationend", () => {
+      floats.delete(s);
+      s.remove();
+    });
+  }
+  function clearFloats(): void {
+    floats.forEach((s) => s.remove());
+    floats.clear();
+  }
+  function startRain(): void {
+    rainActive = true;
+    clearRainTimer();
+    rainTimer = setTimeout(() => {
+      rainTimer = null;
+      endRain();
+    }, RAIN_MS);
+    bloomTo(RAIN_BLOOM, 0.6);
+    restartAnim(rainTitleEl, "on"); // 大字「星雨」
+    restartAnim(meteorEl, "on"); // 一颗 CSS 流星掠过
+    updateHUD();
+  }
+  function endRain(): void {
+    if (!rainActive && rainTimer === null) return;
+    rainActive = false;
+    clearRainTimer();
+    rainTitleEl.classList.remove("on");
+    bloomTo(BLOOM_BASE, 0.9);
+    updateHUD();
+  }
+
+  // ---- 音效出口（拨弦；懒建 AudioContext） ----
+  // pluckHigh / pluckLow 为模块级函数，直接调用即可。
 
   // ---------------------------------------------------------------- 答题状态机（事件驱动）
 
-  function startQuest(): void {
-    const q = CH2_QUESTS[questIdx];
-    phase = "asking";
+  /** 当前题初始化：重置每题现场（不碰天空与卡片，由 startQuest/renderQuestState 驱动） */
+  function prepQuest(): void {
+    const q = deck[questIdx];
     misses = 0;
     hintLevel = 0;
-    if (q) ctx.sky.setGroupProgress(q.target, 0); // 熄灭待寻
-    showAskCard();
+    flashSeen = false;
+    wrongOpts.clear();
+    optionOrder =
+      q?.type === "choice" ? ch2Shuffle((q.options ?? []).map((_, i) => i), Math.random) : [];
+    timeLimitMs = ch2TimeLimit(questIdx) * 1000;
+    remainMs = timeLimitMs;
+    deadlineMs = 0;
+  }
+
+  /** 答题段内武装当前题：熄灭目标、上弦倒计时、闪现题起高亮 */
+  function armQuest(): void {
+    if (seg !== SEG_QUIZ || phase !== "asking") return;
+    const q = deck[questIdx];
+    if (!q) return;
+    ctx.sky.setGroupProgress(q.target, 0); // 熄灭待寻
+    deadlineMs = performance.now() + remainMs;
+    timerBarCache = "";
+    updateTimerBar(remainMs / timeLimitMs);
+    if (q.type === "flash" && !flashSeen) startFlash(q);
+  }
+
+  /** 闪现题型：目标高亮 FLASH_MS 后拉回 0（凭记忆点回） */
+  function startFlash(q: Ch2Quest): void {
+    ctx.sky.setGroupProgress(q.target, 1);
+    clearFlashTimer();
+    flashTimer = setTimeout(() => {
+      flashTimer = null;
+      flashSeen = true;
+      flashTween?.kill();
+      const proxy = { v: 1 };
+      flashTween = gsap.to(proxy, {
+        v: 0,
+        duration: 0.5,
+        ease: "power1.in",
+        onUpdate: () => ctx.sky.setGroupProgress(q.target, proxy.v),
+        onComplete: () => {
+          flashTween = null;
+        },
+      });
+    }, FLASH_MS);
+  }
+  function clearFlash(): void {
+    clearFlashTimer();
+    flashTween?.kill();
+    flashTween = null;
+  }
+
+  function startQuest(): void {
+    const q = deck[questIdx];
+    if (!q) {
+      settle();
+      return;
+    }
+    phase = "asking";
+    prepQuest();
+    if (q.type === "choice") showChoiceCard();
+    else showAskCard();
     renderHints();
-    if (seg === SEG_QUIZ) resetIdleTimer();
+    armQuest();
+    updateHUD();
   }
 
   function solveQuest(): void {
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
     if (!q || phase !== "asking") return;
     phase = "revealed";
     solvedFlags[questIdx] = true;
-    clearIdleTimer();
+    deadlineMs = 0;
+    remainMs = 0;
+    clearFlash();
+    streak += 1;
+    correctCount += 1;
+    const gained = ch2ScoreFor(streak, rainActive);
+    score += gained;
+    misses = 0;
     hintLevel = 0;
-    renderHints(); // 收起箭头/光圈
+    renderHints(); // 收起箭头/光圈（爆闪前清场）
     lightTargetGradual(q.target, 1.1); // 生长点亮
     pulseBloom();
+    ringBurst(q.target); // 金环爆闪放大
+    spawnFloat(`+${gained}`); // 分数飘字
+    pluckHigh(); // 高音拨弦
+    if (streak > 0 && streak % 5 === 0) startRain(); // 满 5 连击触发星雨
+    updateHUD();
     showVerseCard(); // 翻页：诗句 + 出处 + 白话释义
     clearAdvanceTimer();
     advanceTimer = setTimeout(() => {
@@ -692,13 +1332,47 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     }, REVEAL_HOLD_MS);
   }
 
+  /** 答错（点错星 kind="pick" / 点错选项 kind="option"）：扣 1 心、断连击、红闪低音 */
+  function registerMiss(kind: "pick" | "option"): void {
+    if (phase !== "asking") return;
+    hearts = Math.max(0, hearts - 1);
+    streak = 0;
+    if (kind === "pick") {
+      misses += 1;
+      hintLevel = ch2HintLevel(misses, remainMs / 1000);
+      renderHints();
+    }
+    restartAnim(redflashEl, "on"); // 四角红闪 0.3s
+    pluckLow(); // 低音拨弦
+    updateHUD();
+    if (hearts <= 0) settle(); // 心尽提前结算
+  }
+
+  /** 超时：此题作废（扣 1 心、不得分、断连击），目标保持熄灭，直接进下一题 */
+  function onTimeout(): void {
+    if (seg !== SEG_QUIZ || phase !== "asking") return;
+    const q = deck[questIdx];
+    deadlineMs = 0;
+    remainMs = 0;
+    clearFlash();
+    if (q) ctx.sky.setGroupProgress(q.target, 0);
+    hearts = Math.max(0, hearts - 1);
+    streak = 0;
+    restartAnim(redflashEl, "on");
+    pluckLow();
+    updateHUD();
+    if (hearts <= 0) {
+      settle();
+      return;
+    }
+    advanceQuest();
+  }
+
   function advanceQuest(): void {
     clearAdvanceTimer();
     questIdx += 1;
-    if (questIdx >= CH2_QUESTS.length) {
-      questIdx = CH2_QUESTS.length;
-      phase = "done";
-      setCardMode("done");
+    if (questIdx >= deck.length) {
+      settle();
       return;
     }
     startQuest();
@@ -712,88 +1386,190 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   function settleReveal(): void {
     if (phase !== "revealed") return;
     clearAdvanceTimer();
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
     if (q) ctx.sky.setGroupProgress(q.target, 1);
     growthTween?.kill();
     growthTween = null;
     questIdx += 1;
     misses = 0;
     hintLevel = 0;
-    if (questIdx >= CH2_QUESTS.length) {
-      questIdx = CH2_QUESTS.length;
-      phase = "done";
+    if (questIdx >= deck.length) {
+      phase = "asking"; // 让 settle 能进入（其守卫 over 幂等）
+      settle();
     } else {
       phase = "asking";
+      prepQuest(); // 下一题现场由新段落/下次 enter 重建
     }
   }
 
+  /** 跳过：点亮目标直接进下一题——不得分、不扣心、不断连击 */
   function skipQuest(): void {
     if (seg !== SEG_QUIZ || phase !== "asking") return;
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
     if (!q) return;
     solvedFlags[questIdx] = true;
-    clearIdleTimer();
+    deadlineMs = 0;
+    clearFlash();
     hintLevel = 0;
     lightTargetGradual(q.target, 0.6); // 跳过同样走生长点亮
     advanceQuest(); // 直接进下一题（不展示诗句卡）
   }
 
-  /** 滚过 0.80 未答完：剩余题目自动点亮（不卡行程） */
-  function finishAll(): void {
-    clearIdleTimer();
+  /** 一局结算（题尽/心尽/滚过补亮都会走到）：填结算卡、写最高分 */
+  function settle(): void {
+    if (phase === "over") return;
+    phase = "over";
+    deadlineMs = 0;
+    remainMs = 0;
     clearAdvanceTimer();
-    CH2_QUESTS.forEach((q, i) => {
+    clearFlash();
+    growthTween?.kill();
+    growthTween = null;
+    endRain();
+    misses = 0;
+    hintLevel = 0;
+    renderHints();
+    roundEndMs = performance.now();
+    fillResult();
+    setCardMode("result");
+    updateHUD();
+    if (seg === SEG_EXPLORE) scheduleResultHide(); // 探索段短暂停留后让位
+  }
+
+  /** 滚过 0.80 未打完：剩余题目自动点亮（不卡行程）并直接结算 */
+  function finishAll(): void {
+    clearAdvanceTimer();
+    clearFlash();
+    deck.forEach((q, i) => {
       if (!solvedFlags[i]) {
         ctx.sky.setGroupProgress(q.target, 1);
         solvedFlags[i] = true;
       }
     });
-    questIdx = CH2_QUESTS.length;
-    phase = "done";
-    hintLevel = 0;
-    renderHints();
-    setCardMode("done"); // 「星空已全部为你点亮」
+    questIdx = deck.length;
+    settle();
+  }
+
+  function scheduleResultHide(): void {
     clearDoneHideTimer();
     doneHideTimer = setTimeout(() => {
       doneHideTimer = null;
-      if (phase === "done" && seg === SEG_EXPLORE) setCardMode("hidden"); // 让位给探索面板
-    }, DONE_CARD_HOLD_MS);
+      if (phase === "over" && seg === SEG_EXPLORE) setCardMode("hidden"); // 让位给探索面板
+    }, RESULT_CARD_HOLD_MS);
+  }
+
+  /** 重置全部状态开新局（再来一局）：洗牌、满心、分清零，段内立即重放 */
+  function resetRound(): void {
+    clearAdvanceTimer();
+    clearDoneHideTimer();
+    clearFlash();
+    endRain();
+    growthTween?.kill();
+    growthTween = null;
+    clearFloats();
+    redflashEl.classList.remove("on");
+    deck = ch2Shuffle(CH2_QUESTS, Math.random);
+    questIdx = 0;
+    solvedFlags = deck.map(() => false);
+    hearts = CH2_MAX_HEARTS;
+    score = 0;
+    streak = 0;
+    correctCount = 0;
+    phase = "asking";
+    roundStarted = false;
+    roundStartMs = 0;
+    roundEndMs = 0;
+    bestSaved = false;
+    prepQuest();
+    hintLevel = 0;
+    removeRing();
+    setArrowOn(false);
+    updateHUD();
+  }
+
+  /** 平滑滚动到章内进度 p（ScrollTrigger scrub 区间线性映射） */
+  function scrollToProgress(p: number): void {
+    const sec = ctx.root;
+    const top = sec.getBoundingClientRect().top + window.scrollY;
+    const span = Math.max(0, sec.offsetHeight - window.innerHeight);
+    window.scrollTo({ top: top + span * p, behavior: "smooth" });
+  }
+
+  function restartRound(): void {
+    if (phase !== "over") return;
+    resetRound();
+    if (seg === SEG_QUIZ) renderQuestState(); // 段内立即重开
+    else scrollToProgress(0.5); // 探索段点再来一局：滚回答题段（enter 时重放新局）
+  }
+
+  function gotoExplore(): void {
+    if (seg === SEG_EXPLORE) {
+      setCardMode("hidden"); // 已在星野：收起结算卡即可
+      return;
+    }
+    scrollToProgress(0.995); // 滚到段3（scrub 接管后续）
   }
 
   /** 进答题段的一次性现场重建（双向回滚幂等）：全体点亮后仅当前题熄灭 */
   function renderQuestState(): void {
+    if (!roundStarted) {
+      roundStarted = true;
+      roundStartMs = performance.now();
+    }
     lightAllGroups(1);
-    CH2_QUESTS.forEach((q, i) => {
-      if (phase !== "done" && i === questIdx) ctx.sky.setGroupProgress(q.target, 0);
-    });
-    if (phase === "done") setCardMode("done");
-    else if (phase === "revealed") showVerseCard();
-    else showAskCard();
+    if (phase !== "over") {
+      const q = deck[questIdx];
+      if (q) ctx.sky.setGroupProgress(q.target, 0);
+    }
+    if (phase === "over") {
+      fillResult();
+      setCardMode("result");
+    } else if (phase === "revealed") {
+      showVerseCard();
+    } else {
+      const q = deck[questIdx];
+      if (q?.type === "choice") showChoiceCard();
+      else showAskCard();
+    }
     renderHints();
-    if (phase === "asking") resetIdleTimer();
+    armQuest(); // asking 时恢复倒计时/闪现（remainMs 接着走）
+    updateHUD();
   }
 
   function onPickPayload(payload: PickPayload | null): void {
     if (seg !== SEG_QUIZ || phase !== "asking" || !payload) return; // 点空/散星不算点错
-    resetIdleTimer(); // 有效点选即重置无操作计时
-    const q = CH2_QUESTS[questIdx];
-    if (!q) return;
+    const q = deck[questIdx];
+    if (!q || q.type === "choice") return; // 四选一题：天空点击不判定
     if (payload.info.name === q.target) {
       solveQuest();
     } else {
-      misses += 1;
-      hintLevel = ch2HintLevel(misses, 0);
-      renderHints();
+      registerMiss("pick");
+    }
+  }
+
+  function onOptionPick(oi: number, btn: HTMLButtonElement): void {
+    if (seg !== SEG_QUIZ || phase !== "asking") return;
+    const q = deck[questIdx];
+    if (!q || q.type !== "choice" || wrongOpts.has(oi)) return;
+    if (oi === q.answer) {
+      solveQuest();
+    } else {
+      wrongOpts.add(oi);
+      btn.classList.add("wrong");
+      btn.disabled = true;
+      registerMiss("option");
     }
   }
 
   skipBtn.addEventListener("click", skipQuest);
+  againBtn.addEventListener("click", restartRound);
+  gotoExploreBtn.addEventListener("click", gotoExplore);
 
-  // ---------------------------------------------------------------- 每帧 tick（箭头跟踪 + 光圈脉动）
+  // ---------------------------------------------------------------- 每帧 tick（倒计时 + 箭头跟踪 + 光圈脉动）
 
   const tmpVec = new THREE.Vector3();
   function updateArrow(): void {
-    const q = CH2_QUESTS[questIdx];
+    const q = deck[questIdx];
     const dir = q ? TARGET_DIRS[q.target] : undefined;
     if (!dir) {
       setArrowOn(false);
@@ -828,8 +1604,23 @@ export function createChapter(ctx: ChapterCtx): Chapter {
 
   function tick(now: number): void {
     rafId = requestAnimationFrame(tick);
+    // 本题倒计时：走条、濒临超时升级光圈、超时作废
+    if (deadlineMs > 0 && seg === SEG_QUIZ && phase === "asking") {
+      const rem = deadlineMs - now;
+      if (rem <= 0) {
+        onTimeout();
+      } else {
+        remainMs = rem;
+        updateTimerBar(rem / timeLimitMs);
+        const q = deck[questIdx];
+        if (q && q.type !== "choice" && hintLevel < 2 && rem <= CH2_URGENT_HINT_SECONDS * 1000) {
+          hintLevel = 2; // 濒临超时：淡金光圈
+          renderHints();
+        }
+      }
+    }
     if (arrowOn) updateArrow();
-    if (ring) {
+    if (ring && !ringBursting) {
       const s = ringBase * (1 + 0.13 * Math.sin(now * 0.0024));
       ring.scale.set(s, s, 1);
       ring.material.opacity = 0.7 + 0.3 * Math.sin(now * 0.0024 + 1);
@@ -839,9 +1630,12 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   // ---------------------------------------------------------------- 段驱动（update 高频路径）
 
   function onSegEnter(s: number, prev: number): void {
-    // 离开答题段：暂停计时、生长动画不跨段残留、答对翻页中的题立即结算
+    // 离开答题段：暂停倒计时与闪现、星雨收束、生长动画不跨段残留、
+    // 答对翻页中的题立即结算
     if (prev === SEG_QUIZ) {
-      clearIdleTimer();
+      pauseCountdown();
+      clearFlash();
+      endRain();
       if (phase !== "revealed") {
         growthTween?.kill(); // 跳过/点亮的生长动画同样不跨段（settleReveal 内已处理 revealed 情形）
         growthTween = null;
@@ -857,6 +1651,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       setCardMode("hidden");
       setExploreOn(false);
       setHintOn(false);
+      setHudOn(false);
       renderHints(); // 收起箭头/光圈（状态保留，回答题段时恢复）
     } else if (s === SEG_QUIZ) {
       ctx.sky.setPickingEnabled(true);
@@ -867,6 +1662,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       setFinaleOn(false);
       setExploreOn(false);
       setHintOn(false);
+      setHudOn(true);
       renderQuestState();
     } else {
       ctx.sky.setPickingEnabled(true);
@@ -875,8 +1671,9 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       setTitleOn(false);
       setActiveLine(-1);
       setFinaleOn(false);
-      if (phase !== "done") finishAll(); // 未答完：剩余自动点亮
-      else setCardMode("hidden");
+      setHudOn(false);
+      if (phase !== "over") finishAll(); // 未打完：剩余自动点亮并结算
+      else scheduleResultHide(); // 已结算：结算卡短暂停留后让位
       setExploreOn(true);
       setHintOn(true);
     }
@@ -920,10 +1717,15 @@ export function createChapter(ctx: ChapterCtx): Chapter {
 
   // ---------------------------------------------------------------- Chapter
 
+  // 初始一局现场（不武装倒计时：seg=-1，待首次进答题段时由 renderQuestState 起表）
+  resetRound();
+
   return {
     enter() {
       ctx.root.classList.add("inview");
-      ctx.sky.setLabelsEnabled(true);
+      // 标签权属归 onSegEnter（段1/探索开、答题段关防泄题）。此处不得置位——
+      // 若 ScrollTrigger 先 onUpdate 后 onEnter（瞬时跳转会发生），置 true 会
+      // 盖掉答题段的 false 且 seg 已同步不会重进 onSegEnter，防泄题失效。
       unsubPick?.(); // 防御：enter/exit 严格成对，重复 enter 不泄漏监听
       unsubPick = ctx.sky.onPick(onPickPayload);
       if (rafId) cancelAnimationFrame(rafId);
@@ -964,22 +1766,31 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       rafId = 0;
       unsubPick?.();
       unsubPick = null;
-      clearIdleTimer();
+      pauseCountdown(); // 本题剩余时间留存，重进答题段接着走
+      clearFlash();
       clearAdvanceTimer();
       clearDoneHideTimer();
       settleReveal(); // 翻页中的题先结算（生长补满、questIdx 推进），再统一清理
       growthTween?.kill();
       growthTween = null;
+      endRain(); // 星雨收束（内部 bloom 缓回基线，随后统一复位）
       if (bloomTween) {
-        // 脉冲进行中才复位（已完成时 strength 已缓回基线，不碰 tier 档位的值）
+        // 脉冲/星雨进行中才复位（已完成时 strength 已缓回基线，不碰 tier 档位的值）
         bloomTween.kill();
         bloomTween = null;
         ctx.sky.setBloom({ strength: BLOOM_BASE });
       }
+      ringBurstTween?.kill();
+      ringBurstTween = null;
+      ringBursting = false;
       removeRing();
       ringTex?.dispose();
       ringTex = null;
       setArrowOn(false);
+      clearFloats(); // 分数飘字清场
+      redflashEl.classList.remove("on");
+      meteorEl.classList.remove("on");
+      rainTitleEl.classList.remove("on");
       gazeW = 0;
       gazeActive = false;
       ctx.sky.setGazeBlend(0); // 幂等释放脚本注视
@@ -992,7 +1803,9 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       setCardMode("hidden");
       setExploreOn(false);
       setHintOn(false);
+      setHudOn(false);
       seg = -1; // 强制下次 enter 重建段现场
+      void actx?.suspend(); // 音频挂起（下次拨弦时按需 resume）
       // 星官组保持点亮（ch3 背景用），不回滚
     },
   };

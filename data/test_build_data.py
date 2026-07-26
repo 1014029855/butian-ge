@@ -35,6 +35,16 @@ def test_star_color_index_range():
     assert normal / len(with_ci) > 0.99, "绝大多数 ci 应在 -0.5~2.6 正常 B-V 范围"
 
 
+def test_star_distance_range():
+    stars = load(STARS)["stars"]
+    with_dist = [s["dist"] for s in stars if s["dist"] is not None]
+    assert len(with_dist) / len(stars) > 0.9, \
+        f"dist 非空占比过低: {len(with_dist)}/{len(stars)}"
+    for s in stars:
+        if s["dist"] is not None:
+            assert 0.5 <= s["dist"] <= 3000, f"HIP {s['hip']} dist 异常: {s['dist']}"
+
+
 def test_asterisms_count_and_chinese_names():
     asterisms = load(ASTERISMS)["asterisms"]
     assert len(asterisms) >= 250, f"星官过少: {len(asterisms)}"
@@ -79,6 +89,7 @@ def test_poem_full_coverage_and_no_placeholder():
 if __name__ == "__main__":
     test_stars_count_and_ranges()
     test_star_color_index_range()
+    test_star_distance_range()
     test_asterisms_count_and_chinese_names()
     test_asterism_stars_exist_in_catalog()
     test_western_constellations()

@@ -17,7 +17,7 @@ import { CameraRig, CHAPTER_KEYS } from "./CameraRig";
 import { setupChapters } from "./chapters";
 import { createCursor } from "./cursor";
 import { createMilkyWay } from "./MilkyWay";
-import { createPager } from "./pager";
+import { createPager, toggleFullscreen } from "./pager";
 import { R, SkyApp } from "./SkyApp";
 
 /** 相机总进度阻尼系数（/秒），越大跟手越快 */
@@ -69,6 +69,15 @@ async function boot(): Promise<void> {
   const PAGER_SECTIONS = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => document.getElementById(`ch${i}`)!);
   const PAGER_NAMES = ["序", "星野", "授时", "天人", "天球", "岁差", "对话", "尾声"] as const;
   const pager = createPager({ sections: PAGER_SECTIONS, names: PAGER_NAMES });
+
+  // F 键切换全屏：输入框/文本域/可编辑区聚焦时不劫持按键；
+  // 不支持全屏的环境由 toggleFullscreen 内部静默忽略
+  window.addEventListener("keydown", (e) => {
+    if ((e.key !== "f" && e.key !== "F") || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    toggleFullscreen();
+  });
 
   // 相机总进度：目标值由章节 ScrollTrigger 上报，当前值在渲染循环中阻尼趋近
   let camTarget = 0;

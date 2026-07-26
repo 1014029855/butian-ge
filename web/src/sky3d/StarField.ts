@@ -1,6 +1,6 @@
 /**
- * POC 星空渲染：恒星点云（自定义 ShaderMaterial：逐星确定性闪烁 + B-V 近似黑体色）
- * + 星官连线（ConstellationLines.ts，按组生长点亮）+ 经纬网格球。
+ * POC 星空渲染：恒星点云（自定义 ShaderMaterial：逐星确定性闪烁 + B-V 近似黑体色
+ * + 亮星十字衍射芒）+ 星官连线（ConstellationLines.ts，按组生长点亮）+ 经纬网格球。
  * 依赖 coords.ts 的 radecToVec3 把手性约定（北天极 +Y、春分点 +X、左手系嵌入）。
  */
 import * as THREE from "three";
@@ -26,6 +26,9 @@ interface StarRec {
 function magWeight(mag: number): number {
   return THREE.MathUtils.clamp((6.5 - mag) / 7.0, 0, 1);
 }
+
+/** 衍射星芒星等阈值：比 2.2 等亮的星才叠加细十字芒（aSpike=1） */
+const SPIKE_MAG_LIMIT = 2.2;
 
 /** 可播种伪随机数（mulberry32）：同一 hip 每次加载生成完全一致的闪烁参数。 */
 function mulberry32(seed: number): () => number {
@@ -101,23 +104,31 @@ export function ciToColor(ci: number | null | undefined): [number, number, numbe
 }
 
 const STAR_VERT = /* glsl */ `
+const float SPIKE_SCALE = 4.0; // 星芒星 sprite 放大倍数：星芒全长 ≈ 4× 点径（3~6 倍档）
 attribute float aSize;
 attribute vec3 aColor;
 attribute float aAlpha;
 attribute float aPhase; // 闪烁相位（周期分数 0~1）
 attribute float aFreq;  // 闪烁频率 Hz（周期 2.4~7.6s）
 attribute float aAmp;   // 闪烁振幅（≤0.18，只调制透明度）
+attribute float aSpike; // 1 = 亮星衍射星芒（mag < 2.2，见 SPIKE_MAG_LIMIT）
 uniform float uPixelRatio;
 uniform float uTime;    // 秒，由 setTime 每帧更新
 uniform float uDistBoost; // 球外距离补偿（≥1，见 distBoost）：尺寸/透明度同比例放大
 varying vec3 vColor;
 varying float vAlpha;
+varying float vSpike;
+varying float vCoreScale; // sprite 放大倍数（1 = 无星芒）：亮核在 fragment 里同比收缩复原
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float dist = max(-mv.z, 0.001);
-  // 以距天球面 100（=R）为参考距离做透视衰减，再乘 devicePixelRatio
-  gl_PointSize = clamp(aSize * uPixelRatio * uDistBoost * (100.0 / dist), 0.75, 36.0 * uPixelRatio);
+  vCoreScale = 1.0 + aSpike * (SPIKE_SCALE - 1.0);
+  // 以距天球面 100（=R）为参考距离做透视衰减，再乘 devicePixelRatio。
+  // 星芒星 sprite 放大给十字芒留画布；36px 上限对其同样生效——球外极端距离下
+  // 星芒被截短、星点退化为稍大软点，属可接受兜底。
+  gl_PointSize = clamp(aSize * vCoreScale * uPixelRatio * uDistBoost * (100.0 / dist), 0.75, 36.0 * uPixelRatio);
   vColor = aColor;
+  vSpike = aSpike;
   // 呼吸式闪烁（余弦波形与旧版 twinkle.ts 一致）：在基础透明度下最多下调 aAmp
   float tw = 1.0 - aAmp * (0.5 - 0.5 * cos(6.2831853 * (uTime * aFreq + aPhase)));
   vAlpha = clamp(aAlpha * uDistBoost, 0.0, 1.0) * tw;
@@ -129,14 +140,29 @@ const STAR_FRAG = /* glsl */ `
 precision mediump float;
 varying vec3 vColor;
 varying float vAlpha;
+varying float vSpike;
+varying float vCoreScale;
 void main() {
   vec2 uv = gl_PointCoord - 0.5;
-  float d = length(uv) * 2.0; // 0 = 圆心，1 = 边缘
-  if (d > 1.0) discard;
+  vec2 cuv = uv * vCoreScale;  // 亮核坐标：星芒星 sprite 已放大，亮核同比收缩、角径不变
+  float d = length(cuv) * 2.0; // 0 = 圆心，1 = 边缘
   // 高斯亮核 + 一圈微弱光晕，圆形软边
   float core = exp(-d * d * 7.0);
   float halo = exp(-d * d * 2.5) * 0.4;
-  float a = clamp(core + halo, 0.0, 1.0) * vAlpha;
+  float lum = core + halo;
+  if (vSpike > 0.5) {
+    // 细十字衍射芒：沿水平/垂直轴的指数衰减窄亮线。
+    // 轴向衰减 5.0：芒尖延伸到 sprite 边缘（全长 ≈ SPIKE_SCALE × 点径）；
+    // 横向衰减 7×vCoreScale：宽度压到亮核尺度的极窄一条；
+    // 峰值 0.35 封顶再乘 vAlpha：透明度克制（≤0.35）且与闪烁联动。
+    vec2 q = abs(uv);
+    float lineH = exp(-q.x * 5.0) * exp(-q.y * 7.0 * vCoreScale);
+    float lineV = exp(-q.y * 5.0) * exp(-q.x * 7.0 * vCoreScale);
+    lum += (lineH + lineV) * 0.35;
+  } else if (d > 1.0) {
+    discard; // 非星芒星保持原有的圆形软边裁剪
+  }
+  float a = clamp(lum, 0.0, 1.0) * vAlpha;
   gl_FragColor = vec4(vColor, a);
 }
 `;
@@ -150,6 +176,7 @@ function buildStars(stars: StarRec[], R: number): THREE.Points {
   const phases = new Float32Array(n);
   const freqs = new Float32Array(n);
   const amps = new Float32Array(n);
+  const spikes = new Float32Array(n);
 
   for (let i = 0; i < n; i++) {
     const s = stars[i];
@@ -174,6 +201,9 @@ function buildStars(stars: StarRec[], R: number): THREE.Points {
     phases[i] = tw.phase;
     freqs[i] = tw.freq;
     amps[i] = tw.amp;
+
+    // 亮星衍射星芒：一等星以上（mag < 2.2）才画细十字芒
+    spikes[i] = s.mag < SPIKE_MAG_LIMIT ? 1 : 0;
   }
 
   const geo = new THREE.BufferGeometry();
@@ -184,6 +214,7 @@ function buildStars(stars: StarRec[], R: number): THREE.Points {
   geo.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
   geo.setAttribute("aFreq", new THREE.BufferAttribute(freqs, 1));
   geo.setAttribute("aAmp", new THREE.BufferAttribute(amps, 1));
+  geo.setAttribute("aSpike", new THREE.BufferAttribute(spikes, 1));
 
   const mat = new THREE.ShaderMaterial({
     vertexShader: STAR_VERT,

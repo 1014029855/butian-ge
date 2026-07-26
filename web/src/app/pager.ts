@@ -1,11 +1,24 @@
 /**
- * 翻页器：右下角固定的章节导航（上一章 / 下一章 + 当前章指示）。
+ * 翻页器：右下角固定的章节导航（上一章 / 下一章 + 当前章指示 + 全屏切换）。
  * 桌面与手机通用：按钮 ≥44px 触控面、墨蓝描金胶囊、不挡画布交互
  * （容器 pointer-events:none，仅按钮本体 auto）。自挂载、自注入样式。
  *
  * 滚动用原生 scrollIntoView({behavior:"smooth"})——ScrollTrigger 的
  * scrub 随平滑滚动自然驱动全部章节动画，无需额外插件。
  */
+
+/**
+ * 全屏切换（翻页按钮与 app.ts 的 F 键共用入口）。
+ * 环境不支持全屏时静默忽略；requestFullscreen 被浏览器拒绝（如无用户手势）也不抛错。
+ */
+export function toggleFullscreen(): void {
+  if (!document.fullscreenEnabled) return;
+  if (document.fullscreenElement) {
+    Promise.resolve(document.exitFullscreen()).catch(() => {});
+  } else {
+    Promise.resolve(document.documentElement.requestFullscreen()).catch(() => {});
+  }
+}
 
 export interface PagerOptions {
   /** 章节容器（ch1..ch8 的 section 元素，顺序即页序） */
@@ -71,7 +84,24 @@ export function createPager({ sections, names }: PagerOptions): { setCurrent(i: 
   next.type = "button";
   next.setAttribute("aria-label", "下一章");
   next.textContent = "›";
-  root.append(prev, idx, next);
+  // 全屏切换按钮：⛶ 两态图标（全屏中显示 ✕），样式复用翻页按钮；
+  // 环境不支持全屏（fullscreenEnabled=false）则不挂载，入口直接隐藏
+  if (document.fullscreenEnabled) {
+    const fs = document.createElement("button");
+    fs.className = "app-pager-btn";
+    fs.type = "button";
+    const syncFs = () => {
+      const on = !!document.fullscreenElement;
+      fs.textContent = on ? "✕" : "⛶";
+      fs.setAttribute("aria-label", on ? "退出全屏（F）" : "进入全屏（F）");
+    };
+    fs.addEventListener("click", toggleFullscreen);
+    document.addEventListener("fullscreenchange", syncFs);
+    syncFs();
+    root.append(prev, idx, next, fs);
+  } else {
+    root.append(prev, idx, next);
+  }
   document.body.appendChild(root);
 
   const last = sections.length - 1;

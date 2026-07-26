@@ -44,7 +44,8 @@ body {
   font-family: var(--font-body);
 }
 
-/* 影院渐晕：四周压暗，视线聚向天区中央 */
+/* 极轻影院渐晕：四角微微压暗（顶点 ≤0.12），视线聚向天区中央而不吞暗星；
+   层级介于星空画布（z-index:0）与章节内容（z-index:2）之间，不拦截指针 */
 body::before {
   content: "";
   position: fixed;
@@ -53,9 +54,9 @@ body::before {
   pointer-events: none;
   background: radial-gradient(
     ellipse 108% 96% at 50% 46%,
-    transparent 52%,
-    rgba(5, 7, 13, 0.38) 82%,
-    rgba(5, 7, 13, 0.62) 100%
+    transparent 60%,
+    rgba(5, 7, 13, 0.06) 84%,
+    rgba(5, 7, 13, 0.12) 100%
   );
 }
 
