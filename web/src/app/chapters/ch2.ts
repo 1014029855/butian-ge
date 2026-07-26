@@ -145,6 +145,9 @@ const SEG1_LINES: readonly { text: string; label: string; groups: readonly strin
   { text: "邱下一狼光蓬茸", label: "天狼", groups: ["天狼"] },
 ];
 
+/** 段1 各句的高光金环目标（与 SEG1_LINES 同序；河鼓·织女句取河鼓——牵牛星最亮最醒目） */
+const SEG1_RING_TARGETS: readonly string[] = ["北斗", "北极", "心宿", "河鼓", "天狼"];
+
 /** 段1 各句的脚本注视目标（与 SEG1_LINES 同序；ra/dec 与文件头质心表一致） */
 const SEG1_GAZE_TARGETS: readonly THREE.Quaternion[] = (() => {
   // 河鼓·织女句取两质心的矢量平均中点
@@ -227,12 +230,17 @@ const CH2_CSS = `
   letter-spacing: 0.12em; line-height: 2.1; color: #fce1b6;
 }
 
-/* ---- 段1：竖排诗句（一句一屏，居中大字） ---- */
+/* ---- 段1：竖排诗句（一句一屏，靠左侧面板；天空留给对应星官高光） ---- */
 .ch2-lines { position: absolute; inset: 0; pointer-events: none; }
 .ch2-line {
-  position: absolute; left: 50%; top: 46%;
-  transform: translate(-50%, -50%);
-  display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 20px;
+  position: absolute; left: 5.5vw; top: 50%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 18px;
+  padding: 22px 18px;
+  background: rgba(13, 13, 17, 0.55);
+  border: 1px solid rgba(201, 162, 39, 0.28);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
   opacity: 0; transition: opacity 0.7s ease;
 }
 .ch2-line.on { opacity: 1; }
@@ -881,14 +889,19 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       lightAllGroups(st.finale);
       finaleWritten = st.finale > 0;
     }
-    // 五句对应星官随句生长（覆盖在 finale 之上：句内进度恒 ≥ finale）
+    // 五句对应星官：当前句生长全亮，前句压暗（高光只给当前星官）；收尾随 finale 回亮
     st.lines.forEach((v, i) => {
       const line = SEG1_LINES[i];
       if (!line) return;
-      for (const g of line.groups) ctx.sky.setGroupProgress(g, v);
+      const eff = Math.max(st.finale, i === st.active ? v : v * 0.15);
+      for (const g of line.groups) ctx.sky.setGroupProgress(g, eff);
     });
     setTitleOn(p < SEG1_INTRO_END);
-    setActiveLine(p >= SEG1_INTRO_END && p < SEG1_LINES_END ? st.active : -1);
+    const active = p >= SEG1_INTRO_END && p < SEG1_LINES_END ? st.active : -1;
+    setActiveLine(active);
+    // 高光金环指向当前句星官（离开诗句区即移除；与寻星提示共用同一枚环，分段不冲突）
+    if (active >= 0) ensureRing(SEG1_RING_TARGETS[active] ?? "");
+    else removeRing();
     setFinaleOn(p >= SEG1_LINES_END);
   }
 
