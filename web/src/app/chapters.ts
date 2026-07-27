@@ -95,6 +95,17 @@ export const CHAPTER_DEFS: readonly ChapterDef[] = Object.keys(chapterModules)
 export interface SetupResult {
   chapters: Chapter[];
   triggers: ScrollTrigger[];
+  /**
+   * 活动章生命周期管理器（每帧按 scrollY 调用）。
+   *
+   * 为什么不用 ScrollTrigger 的 onEnter/onLeave：Lenis 平滑滚动与翻页器
+   * 瞬时跳章场景下，ST 的 enter/leave 回调在大幅跨越时会漏 fire（只补
+   * onUpdate），导致章节 enter() 的天空状态切换与 .inview 入场失效。
+   * 生命周期改由本管理器按滚动位置推导——幂等、与滚动方式无关
+   * （Lenis / 原生 / instant 跳章 / F5 滚动恢复，全部收敛正确）。
+   * ScrollTrigger 只保留 onUpdate 上报 scrub 进度。
+   */
+  syncActive(y: number): void;
 }
 
 /**
@@ -108,6 +119,9 @@ export function setupChapters(
 ): SetupResult {
   const chapters: Chapter[] = [];
   const triggers: ScrollTrigger[] = [];
+  const sections: HTMLElement[] = [];
+  /** 当前活动章序号；-1 = 尚未同步（首帧强制 enter，覆盖 F5 滚动恢复） */
+  let activeIdx = -1;
 
   CHAPTER_DEFS.forEach((def, i) => {
     const root = document.getElementById(def.id);
@@ -116,6 +130,7 @@ export function setupChapters(
     if (!copy) throw new Error(`COPY 缺少 ${def.id} 文案`);
     const chapter = def.create({ sky, root, copy, id: def.id });
     chapters.push(chapter);
+    sections.push(root);
 
     triggers.push(
       ScrollTrigger.create({
@@ -123,16 +138,7 @@ export function setupChapters(
         start: "top top",
         end: "bottom bottom",
         scrub: true,
-        onEnter: () => {
-          chapter.enter();
-          riseChapterTitles(root);
-        },
-        onEnterBack: () => {
-          chapter.enter();
-          riseChapterTitles(root);
-        },
-        onLeave: () => chapter.exit(),
-        onLeaveBack: () => chapter.exit(),
+        // 生命周期回调刻意不接（见 syncActive 注释）；这里只上报 scrub 进度
         onUpdate: (self) => {
           chapter.update(self.progress);
           onCameraProgress(i + self.progress);
@@ -141,5 +147,21 @@ export function setupChapters(
     );
   });
 
-  return { chapters, triggers };
+  /** 活动章推导：最后一个个章顶已过视口顶的章（与 ST start "top top" 同义） */
+  function syncActive(y: number): void {
+    let idx = 0;
+    for (let i = sections.length - 1; i >= 0; i--) {
+      if (y >= sections[i].offsetTop) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx === activeIdx) return;
+    if (activeIdx >= 0) chapters[activeIdx].exit();
+    activeIdx = idx;
+    chapters[activeIdx].enter();
+    riseChapterTitles(sections[activeIdx]);
+  }
+
+  return { chapters, triggers, syncActive };
 }

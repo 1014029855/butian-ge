@@ -548,8 +548,16 @@ const CH2_CSS = `
 }
 .ch2-scroll-head span { font-size: 11px; letter-spacing: 0.4em; color: #af915f; }
 .ch2-scroll-total {
+  display: inline-block;
   font-family: var(--font-display, "Songti SC", serif);
   font-size: 15px; font-weight: 400; color: #fce1b6;
+}
+/* 唤醒计数脉动：数字变化时轻跳一下（JS 翻 .pulse） */
+.ch2-scroll-total.pulse { animation: ch2TotalPulse 0.45s ease-out; }
+@keyframes ch2TotalPulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); color: #f2dd9a; text-shadow: 0 0 10px rgba(242, 221, 154, 0.7); }
+  100% { transform: scale(1); }
 }
 .ch2-scroll-body { transition: opacity 0.5s ease, max-height 0.6s ease; max-height: 220px; overflow: hidden; }
 .ch2-region {
@@ -1004,6 +1012,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   }
 
   // ---- 收集卷 ----
+  let lastTotal = -1; // 上次计数（脉动触发用）
   function updateScroll(): void {
     const done: Record<Ch2Region, number> = {
       ziwei: 0,
@@ -1031,6 +1040,13 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     const tg = totalGroups();
     scrollTotal.textContent = tg > 0 ? `${awakened.size} / ${tg}` : `${awakened.size} / —`;
     scrollCount.textContent = `你已唤醒 ${awakened.size} 颗`;
+    // 计数变化脉动（reflow 重启动画）
+    if (awakened.size !== lastTotal) {
+      lastTotal = awakened.size;
+      scrollTotal.classList.remove("pulse");
+      void scrollTotal.offsetWidth;
+      scrollTotal.classList.add("pulse");
+    }
   }
 
   // ---- 金环（段1 高光 / 闲置一闪共用） ----

@@ -718,7 +718,13 @@ export class SkyApp {
     const ast = this.hipToAsterism.get(star.hip);
     const name = star.name ?? `HIP ${star.hip}`;
     const text = ast && ast.name !== name ? `${name} · ${ast.name}` : name;
-    if (this.hoverTip.textContent !== text) this.hoverTip.textContent = text;
+    if (this.hoverTip.dataset.v !== text) {
+      this.hoverTip.dataset.v = text;
+      this.hoverTip.innerHTML =
+        ast && ast.name !== name
+          ? `${name}<span class="tip-ast">${ast.name}</span>`
+          : name;
+    }
     this.hoverTip.style.left = `${this.hoverNdc!.cx + 16}px`;
     this.hoverTip.style.top = `${this.hoverNdc!.cy + 14}px`;
     if (this.hoverTip.style.display !== "block") this.hoverTip.style.display = "block";

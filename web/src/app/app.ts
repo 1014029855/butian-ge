@@ -90,12 +90,15 @@ async function boot(): Promise<void> {
   // 相机总进度：目标值由章节 ScrollTrigger 上报，当前值在渲染循环中阻尼趋近
   let camTarget = 0;
   let camCurrent = 0;
-  const { chapters } = setupChapters(sky, (g) => {
+  const { chapters, syncActive } = setupChapters(sky, (g) => {
     camTarget = g;
     pager.setCurrent(Math.min(Math.floor(g), PAGER_NAMES.length - 1));
   });
 
   sky.start((dt) => {
+    // 活动章生命周期（enter/exit/inview）：按真实滚动位置推导，
+    // 与滚动方式无关——Lenis 平滑、原生滚动、翻页器瞬时跳章皆收敛
+    syncActive(window.scrollY);
     camCurrent += (camTarget - camCurrent) * (1 - Math.exp(-dt * CAMERA_DAMP));
     sky.applyCameraState(rig.sampleGlobal(camCurrent));
     // 活动章节的每帧钩子（applyCameraState 之后调用，段内脚本注视不被覆写）

@@ -99,9 +99,30 @@ body::after {
   background: rgba(13, 13, 17, 0.82);
   border: 1px solid rgba(201, 162, 39, 0.4);
   border-radius: 3px;
-  padding: 3px 9px;
+  padding: 5px 11px;
   white-space: nowrap;
   text-shadow: 0 0 8px rgba(201, 162, 39, 0.5);
+  /* 阻尼跟随：每帧写 left/top，由 transition 抹成滑动 */
+  transition: left 0.1s linear, top 0.1s linear;
+}
+/* 描金双线：与章节面板同一语言 */
+.sky-tooltip::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  border-radius: 2px;
+  pointer-events: none;
+}
+/* 所属星官：细分隔 + 淡金小字 */
+.sky-tooltip .tip-ast {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(201, 162, 39, 0.35);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: #af915f;
+  text-shadow: none;
 }
 
 /* ---- 加载中 ---- */
