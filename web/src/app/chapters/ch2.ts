@@ -96,6 +96,8 @@ export const CH2_GUIDE_STATIONS: readonly string[] = ["北斗", "北极", "天�
 /** 凝视唤醒：目标角距阈值（度）与持续时长（秒） */
 export const CH2_GAZE_ANGLE_DEG = 4;
 export const CH2_GAZE_HOLD_S = 0.8;
+/** 准星仅在沉睡目标入视（视角心角距小于此值）时出现，平时不占画面中心 */
+const CH2_CROSS_SHOW_DEG = 10;
 /** 自由收集闲置脉动：无交互多少秒后最近沉睡星官金环一闪 */
 export const CH2_IDLE_PULSE_S = 20;
 /** localStorage 唤醒集合键（JSON 字符串数组：星官名） */
@@ -471,7 +473,7 @@ const CH2_CSS = `
   position: absolute; left: 50%; top: 42%;
   transform: translate(-50%, -50%);
   display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 12px;
-  animation: ch2PoemFloat 2.4s ease-out forwards;
+  animation: ch2PoemFloat 5.6s ease-out forwards;
 }
 .ch2-poemfloat-text {
   writing-mode: vertical-rl;
@@ -493,8 +495,8 @@ const CH2_CSS = `
 }
 @keyframes ch2PoemFloat {
   0% { opacity: 0; transform: translate(-50%, -36%); }
-  16% { opacity: 1; }
-  62% { opacity: 1; }
+  8% { opacity: 1; }
+  75% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -130%); }
 }
 
@@ -526,9 +528,9 @@ const CH2_CSS = `
   100% { opacity: 0; transform: translate(-50%, calc(-50% - 12px)); }
 }
 
-/* ---- 段2/段3：收集卷（左下极简，描金细线；done 时收拢为纪念章） ---- */
+/* ---- 段2/段3：收集卷（左上极简，描金细线；避开左下环境音开关与探索面板；done 时收拢为纪念章） ---- */
 .ch2-scroll {
-  position: absolute; left: 3.2vw; bottom: 5vh;
+  position: absolute; left: 3.2vw; top: 5vh;
   width: 208px;
   padding: 14px 16px 12px;
   background: rgba(13, 13, 17, 0.6);
@@ -1369,14 +1371,17 @@ export function createChapter(ctx: ChapterCtx): Chapter {
     return seg === SEG_JOURNEY || seg === SEG_EXPLORE;
   }
 
-  /** 凝视唤醒：准星对准目标角距 <4° 持续 0.8s（引路中只认当前站，自由收集认最近沉睡） */
+  /** 凝视唤醒：准星对准目标角距 <4° 持续 0.8s（引路中只认当前站，自由收集认最近沉睡）；
+      准星本体仅在目标入视（<10°）时出现，平时不占画面中心 */
   function tickGaze(dt: number): void {
     if (!collecting() || atlas.length === 0 || dt <= 0) return;
     const v = viewDir();
     const g = currentGuide();
     const name = g ?? ch2NearestSleeping(atlas, awakened, v);
     const e = name ? atlasByName.get(name) : null;
-    if (e && ch2AngularDistanceDeg(v, e) < CH2_GAZE_ANGLE_DEG) {
+    const dist = e ? ch2AngularDistanceDeg(v, e) : Infinity;
+    setCrossOn(e !== null && dist < CH2_CROSS_SHOW_DEG);
+    if (e && dist < CH2_GAZE_ANGLE_DEG) {
       if (gazeName !== e.name) {
         gazeName = e.name;
         gazeHoldT = 0;
@@ -1489,7 +1494,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       guideDone = ch2GuideTarget(awakened) === null; // 三站俱醒：静默收队（结语不重演）
       updateScroll(); // 卷轴脚行即「你已唤醒 X 颗」
       setScrollOn(true);
-      setCrossOn(true);
+      // 准星由 tickGaze 按目标入视就近驱动，进场不常开
       syncGuidance();
     } else {
       ctx.sky.setPickingEnabled(true);
@@ -1507,7 +1512,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
       scrollEl.classList.toggle("done", tier >= 4);
       updateScroll();
       setScrollOn(true);
-      setCrossOn(true);
+      // 准星由 tickGaze 按目标入视就近驱动，进场不常开
       setExploreOn(true);
       setHintOn(true);
     }
