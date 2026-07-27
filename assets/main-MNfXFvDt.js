@@ -275,11 +275,11 @@ void main() {
 .ch2-card {
   position: absolute;
   max-width: 440px;
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
   padding: 22px 26px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(16px);
   transition: opacity 0.6s ease, transform 0.6s ease;
@@ -739,11 +739,11 @@ void main() {
 .ch4-card {
   position: absolute;
   max-width: 460px;
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
   padding: 22px 26px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(16px);
   transition: opacity 0.6s ease, transform 0.6s ease;
@@ -951,28 +951,45 @@ void main() {
   position: absolute;
   left: 6vw;
   top: 10vh;
-  max-width: 420px;
-  background: rgba(13, 13, 17, 0.72);
+  max-width: 440px;
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
-  padding: 22px 24px;
-  backdrop-filter: blur(4px);
+  padding: 26px 28px;
+  backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(26px);
   transition: opacity 0.9s var(--ease-sig, cubic-bezier(0.8, 0, 0.55, 0.94)),
     transform 0.9s var(--ease-sig, cubic-bezier(0.8, 0, 0.55, 0.94));
 }
+/* 描金双线：与全局面板同一语言 */
+.ch7-panel::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  border-radius: 7px;
+  pointer-events: none;
+}
 .inview .ch7-panel { opacity: 1; transform: translateY(0); }
 .ch7-panel h2 {
   font-family: var(--font-display, "STSong", "SimSun", "Songti SC", serif);
-  font-size: 30px;
+  font-size: clamp(38px, 4.2vw, 52px);
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: var(--gold, #c9a227);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
-.ch7-panel p { font-size: 15px; line-height: 2; opacity: 0.88; }
-.ch7-panel .hook { margin-bottom: 6px; }
+.ch7-panel p { font-size: 15px; line-height: 2.05; opacity: 0.88; }
+.ch7-panel .hook {
+  font-family: var(--font-display, "STSong", "SimSun", serif);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  line-height: 1.9;
+  color: var(--gold-dim, #af915f);
+  opacity: 1;
+  margin-bottom: 10px;
+}
 
 .ch7-compare {
   position: absolute;
@@ -983,10 +1000,10 @@ void main() {
   align-items: center;
   gap: 18px;
   padding: 14px 22px;
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 999px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
   pointer-events: auto; /* .chapter 层默认 pointer-events:none，滑杆需要交互 */
   opacity: 0;
   transition: opacity 0.9s var(--ease-sig, cubic-bezier(0.8, 0, 0.55, 0.94));
@@ -1360,4 +1377,4 @@ void main() {
   .app-pager { right: 12px; bottom: 12px; gap: 8px; }
   .app-pager-idx { font-size: 12px; padding: 7px 10px; letter-spacing: 0.14em; }
 }
-`;function A1({sections:r,names:t}){const n=document.createElement("style");n.textContent=P1,document.head.appendChild(n);const e=document.createElement("div");e.className="app-pager";const i=document.createElement("button");i.className="app-pager-btn",i.type="button",i.setAttribute("aria-label","上一章"),i.textContent="‹";const s=document.createElement("span");s.className="app-pager-idx";const o=document.createElement("button");if(o.className="app-pager-btn",o.type="button",o.setAttribute("aria-label","下一章"),o.textContent="›",document.fullscreenEnabled){const f=document.createElement("button");f.className="app-pager-btn",f.type="button";const d=()=>{const p=!!document.fullscreenElement;f.textContent=p?"✕":"⛶",f.setAttribute("aria-label",p?"退出全屏（F）":"进入全屏（F）")};f.addEventListener("click",Rf),document.addEventListener("fullscreenchange",d),d(),e.append(i,s,o,f)}else e.append(i,s,o);document.body.appendChild(e);const a=r.length-1;let l=0;function c(){const f=window.innerHeight,d=[];for(const p of r){const g=p.offsetTop,m=Math.max(p.offsetHeight-f,0),v=Math.round(m/f);for(let _=0;_<=v;_++)d.push(g+Math.min(_*f,m))}return d.sort((p,g)=>p-g)}function u(){s.textContent=t[l]?`${t[l]} · ${l+1}/${r.length}`:`${l+1}/${r.length}`;const f=document.documentElement.scrollHeight-window.innerHeight;i.disabled=window.scrollY<=2,o.disabled=window.scrollY>=f-2}function h(f){var w,x,S;const d=c(),p=window.scrollY,g=2,m=f>0?d.find(k=>k>p+g)??d[d.length-1]:[...d].reverse().find(k=>k<p-g)??0;if(m===void 0)return;let v=0;for(let k=0;k<r.length;k++)r[k].offsetTop<=m+g&&(v=k);const _=((S=(x=(w=r[v])==null?void 0:w.querySelector("h1, h2"))==null?void 0:x.textContent)==null?void 0:S.trim())||t[v]||"";gu(!0),g0(_,()=>M1(m,!0)).finally(()=>gu(!1))}return i.addEventListener("click",()=>h(-1)),o.addEventListener("click",()=>h(1)),window.addEventListener("scroll",u,{passive:!0}),u(),{setCurrent(f){const d=Math.min(Math.max(Math.round(f),0),a);d!==l&&(l=d,u())}}}const R1=3.5;function O1(){try{const r=document.createElement("canvas");return!!(r.getContext("webgl2")||r.getContext("webgl"))}catch{return!1}}function mu(r){var e,i,s;const t=document.getElementById("fallback");t&&(t.hidden=!1);const n=document.getElementById("fallback-diag");n&&(n.textContent=`诊断信息：${r}`),(e=document.getElementById("chapters"))==null||e.setAttribute("hidden",""),(i=document.getElementById("sky-canvas"))==null||i.setAttribute("hidden",""),(s=document.getElementById("loading"))==null||s.remove()}async function L1(){const r=document.getElementById("sky-canvas");if(!r)throw new Error("缺少 #sky-canvas");const t=new Ha(r);a1(r);const n=document.getElementById("loading");try{await t.init()}catch(h){console.error(h),n&&(n.textContent="星空数据加载失败，请检查开发服务器");return}n==null||n.remove(),C1(),t.addSkyObject(_1(bt).group),Pd(),m0("步天歌");const e=new So(w0),i=[1,2,3,4,5,6,7,8].map(h=>document.getElementById(`ch${h}`)),s=["序","星野","授时","天人","天球","岁差","对话","尾声"],o=A1({sections:i,names:s});window.addEventListener("keydown",h=>{if(h.key!=="f"&&h.key!=="F"||h.ctrlKey||h.metaKey||h.altKey)return;const f=h.target;f&&(f.tagName==="INPUT"||f.tagName==="TEXTAREA"||f.isContentEditable)||Rf()});let a=0,l=0;const{chapters:c,syncActive:u}=s1(t,h=>{a=h,o.setCurrent(Math.min(Math.floor(h),s.length-1))});t.start(h=>{var d,p;u(window.scrollY),l+=(a-l)*(1-Math.exp(-h*R1)),t.applyCameraState(e.sampleGlobal(l));const f=Math.min(Math.max(Math.floor(l),0),c.length-1);(p=(d=c[f])==null?void 0:d.frame)==null||p.call(d,h)})}O1()?L1().catch(r=>{console.error(r),mu(r instanceof Error?r.message:String(r))}):mu("当前浏览器环境无法创建 WebGL 上下文（webgl2 / webgl 均不可用）");
+`;function A1({sections:r,names:t}){const n=document.createElement("style");n.textContent=P1,document.head.appendChild(n);const e=document.createElement("div");e.className="app-pager";const i=document.createElement("button");i.className="app-pager-btn",i.type="button",i.setAttribute("aria-label","上一章"),i.textContent="‹";const s=document.createElement("span");s.className="app-pager-idx";const o=document.createElement("button");if(o.className="app-pager-btn",o.type="button",o.setAttribute("aria-label","下一章"),o.textContent="›",document.fullscreenEnabled){const f=document.createElement("button");f.className="app-pager-btn",f.type="button";const d=()=>{const p=!!document.fullscreenElement;f.textContent=p?"✕":"⛶",f.setAttribute("aria-label",p?"退出全屏（F）":"进入全屏（F）")};f.addEventListener("click",Rf),document.addEventListener("fullscreenchange",d),d(),e.append(i,s,o,f)}else e.append(i,s,o);document.body.appendChild(e);const a=r.length-1;let l=0;function c(){const f=window.innerHeight,d=[];for(const p of r){const g=p.offsetTop,m=Math.max(p.offsetHeight-f,0),v=Math.round(m/f);for(let _=0;_<=v;_++)d.push(g+Math.min(_*f,m))}return d.sort((p,g)=>p-g)}function u(){s.textContent=t[l]?`${t[l]} · ${l+1}/${r.length}`:`${l+1}/${r.length}`;const f=document.documentElement.scrollHeight-window.innerHeight;i.disabled=window.scrollY<=2,o.disabled=window.scrollY>=f-2}function h(f){var w,x,S;const d=c(),p=window.scrollY,g=2,m=f>0?d.find(k=>k>p+g)??d[d.length-1]:[...d].reverse().find(k=>k<p-g)??0;if(m===void 0)return;let v=0;for(let k=0;k<r.length;k++)r[k].offsetTop<=m+g&&(v=k);const _=((S=(x=(w=r[v])==null?void 0:w.querySelector("h1, h2"))==null?void 0:x.textContent)==null?void 0:S.trim())||t[v]||"";gu(!0),g0(_,()=>M1(m,!0)).finally(()=>gu(!1))}return i.addEventListener("click",()=>h(-1)),o.addEventListener("click",()=>h(1)),window.addEventListener("scroll",u,{passive:!0}),u(),{setCurrent(f){const d=Math.min(Math.max(Math.round(f),0),a);d!==l&&(l=d,u())}}}const R1=3.5;function O1(){try{const r=document.createElement("canvas");return!!(r.getContext("webgl2")||r.getContext("webgl"))}catch{return!1}}function mu(r){var e,i,s;const t=document.getElementById("fallback");t&&(t.hidden=!1);const n=document.getElementById("fallback-diag");n&&(n.textContent=`诊断信息：${r}`),(e=document.getElementById("chapters"))==null||e.setAttribute("hidden",""),(i=document.getElementById("sky-canvas"))==null||i.setAttribute("hidden",""),(s=document.getElementById("loading"))==null||s.remove()}async function L1(){const r=document.getElementById("sky-canvas");if(!r)throw new Error("缺少 #sky-canvas");const t=new Ha(r);a1(r);const n=document.getElementById("loading");try{await t.init()}catch(h){console.error(h),n&&(n.textContent="星空数据加载失败，请检查开发服务器");return}n==null||n.remove(),C1(),t.addSkyObject(_1(bt).group),Pd(),m0("步天歌");const e=new So(w0),i=[1,2,3,4,5,6,7,8].map(h=>document.getElementById(`ch${h}`)),s=["序","星野","授时","天人","天球","岁差","对话","尾声"],o=A1({sections:i,names:s});window.addEventListener("keydown",h=>{if(h.key!=="f"&&h.key!=="F"||h.ctrlKey||h.metaKey||h.altKey)return;const f=h.target;f&&(f.tagName==="INPUT"||f.tagName==="TEXTAREA"||f.isContentEditable)||Rf()});let a=0,l=0;const{chapters:c,syncActive:u}=s1(t,h=>{a=h,o.setCurrent(Math.min(Math.floor(h),s.length-1))});t.start(h=>{var d,p;u(window.scrollY),l+=(a-l)*(1-Math.exp(-h*R1)),t.applyCameraState(e.sampleGlobal(l));const f=Math.min(Math.max(Math.floor(l),0),c.length-1);(p=(d=c[f])==null?void 0:d.frame)==null||p.call(d,h)}),window.addEventListener("scroll",()=>u(window.scrollY),{passive:!0})}O1()?L1().catch(r=>{console.error(r),mu(r instanceof Error?r.message:String(r))}):mu("当前浏览器环境无法创建 WebGL 上下文（webgl2 / webgl 均不可用）");
