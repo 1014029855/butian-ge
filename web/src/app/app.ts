@@ -105,6 +105,9 @@ async function boot(): Promise<void> {
     const active = Math.min(Math.max(Math.floor(camCurrent), 0), chapters.length - 1);
     chapters[active]?.frame?.(dt);
   });
+
+  // 同步兜底：scroll 事件即时同步活动章（rAF 降频/暂停时 lifecycle 仍即时正确）
+  window.addEventListener("scroll", () => syncActive(window.scrollY), { passive: true });
 }
 
 if (!webglAvailable()) {

@@ -341,11 +341,11 @@ div.sky-label { font-family: var(--font-display); }
   transform: translateY(calc(-50% + 16px));
   opacity: 0;
   transition: opacity 0.6s var(--ease-sig), transform 0.6s var(--ease-sig);
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
-  padding: 22px 24px;
-  backdrop-filter: blur(4px);
+  padding: 26px 28px;
+  backdrop-filter: blur(8px);
 }
 .atlas-panel.active { opacity: 1; transform: translateY(-50%); }
 .atlas-panel h2 {
@@ -441,6 +441,63 @@ html { scrollbar-width: thin; scrollbar-color: rgba(201, 162, 39, 0.5) #0a0c14; 
   transform: translateX(-50%);
   width: 40px;
   background: linear-gradient(90deg, rgba(201, 162, 39, 0), rgba(201, 162, 39, 0.75), rgba(201, 162, 39, 0));
+}
+
+/* ---- 巨型章节水印字：古籍雕版幽灵字（与各章朱砂印同字，右下贴边） ---- */
+.chapter .pin::before {
+  position: absolute;
+  right: 1vw;
+  bottom: -8vh;
+  font-family: var(--font-display);
+  font-size: clamp(240px, 48vh, 500px);
+  line-height: 1;
+  color: rgba(201, 162, 39, 0.05);
+  -webkit-text-stroke: 1.5px rgba(201, 162, 39, 0.13);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transform: translateY(5vh);
+  transition:
+    opacity 1.4s var(--ease-sig) 0.3s,
+    transform 1.4s var(--ease-sig) 0.3s;
+}
+.chapter.inview .pin::before { opacity: 1; transform: none; }
+#ch2 .pin::before { content: "唤"; }
+#ch3 .pin::before { content: "表"; }
+#ch4 .pin::before { content: "极"; }
+#ch5 .pin::before { content: "球"; }
+#ch6 .pin::before { content: "岁"; }
+#ch7 .pin::before { content: "会"; }
+#ch8 .pin::before { content: "跋"; }
+
+/* ---- 竖排章节签：右侧古籍书口 ---- */
+.chapter .pin::after {
+  position: absolute;
+  right: 2.3vw;
+  top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  letter-spacing: 0.5em;
+  color: rgba(252, 225, 182, 0.38);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 1.1s var(--ease-sig) 0.7s;
+}
+.chapter.inview .pin::after { opacity: 1; }
+#ch1 .pin::after { content: "其壹 · 序 PROLOGUE"; }
+#ch2 .pin::after { content: "其贰 · 唤星之旅 THE AWAKENING"; }
+#ch3 .pin::after { content: "其叁 · 观象授时 THE GNOMON"; }
+#ch4 .pin::after { content: "其肆 · 天人之间 THE POLE STAR"; }
+#ch5 .pin::after { content: "其伍 · 天球仪 THE CELESTIAL SPHERE"; }
+#ch6 .pin::after { content: "其陆 · 一万年 PRECESSION"; }
+#ch7 .pin::after { content: "其柒 · 东西对话 EAST MEETS WEST"; }
+#ch8 .pin::after { content: "其捌 · 尾声 CREDITS"; }
+
+@media (max-width: 860px) {
+  .chapter .pin::before { font-size: 200px; }
+  .chapter .pin::after { display: none; }
 }
 
 @media (max-width: 860px) {

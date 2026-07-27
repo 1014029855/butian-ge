@@ -271,11 +271,11 @@ const CH4_CSS = `
 .ch4-card {
   position: absolute;
   max-width: 460px;
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
   padding: 22px 26px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(16px);
   transition: opacity 0.6s ease, transform 0.6s ease;

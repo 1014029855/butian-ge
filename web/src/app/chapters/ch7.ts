@@ -34,28 +34,45 @@ const CH7_CSS = `
   position: absolute;
   left: 6vw;
   top: 10vh;
-  max-width: 420px;
-  background: rgba(13, 13, 17, 0.72);
+  max-width: 440px;
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
-  padding: 22px 24px;
-  backdrop-filter: blur(4px);
+  padding: 26px 28px;
+  backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(26px);
   transition: opacity 0.9s var(--ease-sig, cubic-bezier(0.8, 0, 0.55, 0.94)),
     transform 0.9s var(--ease-sig, cubic-bezier(0.8, 0, 0.55, 0.94));
 }
+/* 描金双线：与全局面板同一语言 */
+.ch7-panel::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  border-radius: 7px;
+  pointer-events: none;
+}
 .inview .ch7-panel { opacity: 1; transform: translateY(0); }
 .ch7-panel h2 {
   font-family: var(--font-display, "STSong", "SimSun", "Songti SC", serif);
-  font-size: 30px;
+  font-size: clamp(38px, 4.2vw, 52px);
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: var(--gold, #c9a227);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
-.ch7-panel p { font-size: 15px; line-height: 2; opacity: 0.88; }
-.ch7-panel .hook { margin-bottom: 6px; }
+.ch7-panel p { font-size: 15px; line-height: 2.05; opacity: 0.88; }
+.ch7-panel .hook {
+  font-family: var(--font-display, "STSong", "SimSun", serif);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  line-height: 1.9;
+  color: var(--gold-dim, #af915f);
+  opacity: 1;
+  margin-bottom: 10px;
+}
 
 .ch7-compare {
   position: absolute;
@@ -66,10 +83,10 @@ const CH7_CSS = `
   align-items: center;
   gap: 18px;
   padding: 14px 22px;
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 999px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(8px);
   pointer-events: auto; /* .chapter 层默认 pointer-events:none，滑杆需要交互 */
   opacity: 0;
   transition: opacity 0.9s var(--ease-sig, cubic-bezier(0.8, 0, 0.55, 0.94));
