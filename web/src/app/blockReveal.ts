@@ -1,40 +1,54 @@
 /**
- * Block Reveal 页面过渡（v2 · 对齐 obsidianassembly 的惊艳感）。
+ * Block Reveal 页面过渡（v3 · 逐项逆向 obsidianassembly.com 的原版配方）。
  *
- * 从原站提炼的四条「高级感」原则，落进我们的墨蓝金语汇：
- *   1. 巨大而自信的展示字体：章节名 12vw 级宋体，逐字带微旋与字距收拢
- *      （editorial 式排版气场，而非小字标签）；
- *   2. 节奏的预期感：盖上 0.65s → 屏息一拍（0.35s 静止）→ 揭开 0.7s，
- *      hop(0.9,0,0.1,1) 弹感曲线；
- *   3. 材质细节：墨蓝渐变 + 纸纹颗粒 + 前缘金色辉光（盖上前缘在右、
- *      揭开前缘在左）+ 色块间投影；
- *   4. 揭开即「降生」：色块收起的同时，底层星空轻微放大归位
- *      （#sky-canvas scale 1.015→1 + 微透明度过渡），不生硬切换。
- *
- * 拆分自实现（SplitText 为 Club 插件，不引入）：逐字 span + overflow 遮罩。
+ * 从原站 CSS（default.*.css）完整反推出的参数，配色映射到步天歌的夜空×宣纸：
+ *   结构：全屏罩 = 暗场底 + 4 条横贯色块（各 25% 高）+ 中央遮罩文字行。
+ *   盖上（enter）：
+ *     · 暗场 #0a0d18 由透明淡入 1.2s，cubic-bezier(0.35,0.35,0,1)——旧页先「暗下去」；
+ *     · 宣纸色块 transform-origin 左缘，scaleX 0→1，四条同时起跑、时长递增
+ *       0.75 / 0.90 / 1.05 / 1.20s，cubic-bezier(0.69,0,0,1)——右端形成平滑斜切前缘
+ *       （ stagger 延迟是阶梯感，时长递增才是原站的斜切感 ）；
+ *     · 章节名墨色宋体，逐字 translateY 110%→0（overflow 遮罩），
+ *       时长同规则递增，字升起时背后恰好是扫满的宣纸。
+ *   揭开（leave）：
+ *     · 色块 transform-origin 右缘，scaleX→0，时长逆序 1.50 / 1.35 / 1.20 / 1.05s
+ *       （左条最慢，斜切方向与盖上相反）；
+ *     · 文字 translateY→110% 滑回遮罩，0.85s 起逐字递增；
+ *     · 暗场 1.5s 淡出。全程约 2.9s，从容不迫。
+ *   材质：色块 #f1eade（宣纸米白）+ 极轻纸纹颗粒 + box-shadow 0 0 0 1px 同色消缝；
+ *         文字 #1a1720 墨色，压在宣纸上——夜幕里翻过一页纸。
  * 音效：一声克制的低吟拨弦（懒建 AudioContext，首次手势后生效，增益 0.06）。
  */
 import { gsap } from "gsap";
 import { CustomEase } from "gsap/CustomEase";
 
 gsap.registerPlugin(CustomEase);
-CustomEase.create("brHop", "0.9, 0, 0.1, 1");
+// 原站两条曲线：色块/文字用「慢启动后猛然挥到位」，暗场用温和对称加速
+CustomEase.create("oaIn", "0.69, 0, 0, 1");
+CustomEase.create("oaDim", "0.35, 0.35, 0, 1");
 
 const BLOCKS = 4;
-const COVER_S = 0.65;
-const HOLD_S = 0.35;
-const REVEAL_S = 0.7;
-const STAGGER = 0.06;
+/** 盖上：四条同时起跑，时长递增 → 右端斜切 */
+const COVER_DUR = [0.75, 0.9, 1.05, 1.2];
+/** 揭开：左条最慢（逆序）→ 左端斜切 */
+const REVEAL_DUR = [1.5, 1.35, 1.2, 1.05];
+const DIM_COVER_S = 1.2;
+const DIM_REVEAL_S = 1.5;
+/** mid() 调用时点：最慢色块扫满 + 缓冲 */
+const MID_AT = 1.3;
+/** 揭开开始时点（mid 后留 0.15s 让新内容就位） */
+const REVEAL_AT = 1.45;
 
 const NOISE_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")`;
 
 const CSS = `
 .br-overlay { position: fixed; inset: 0; z-index: 90; pointer-events: none; visibility: hidden; }
-.br-blocks { position: absolute; inset: 0; display: flex; }
+.br-dim { position: absolute; inset: 0; background: #0a0d18; opacity: 0; will-change: opacity; }
+.br-blocks { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .br-block {
-  position: relative;
-  flex: 1 1 25%; height: 100%;
-  background: linear-gradient(168deg, #15223a 0%, #101826 45%, #0b0d14 100%);
+  display: block; width: 100%; height: 25%;
+  background: #f1eade;
+  box-shadow: 0 0 0 1px #f1eade; /* 原站手法：消去横条间的子像素缝隙 */
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
@@ -42,27 +56,25 @@ const CSS = `
 .br-block::before {
   content: ""; position: absolute; inset: 0;
   background-image: ${NOISE_SVG};
-  opacity: 0.05; mix-blend-mode: overlay;
+  opacity: 0.045; mix-blend-mode: multiply;
 }
-/* 前缘金色辉光：盖住时在右缘，揭开时在左缘（由 JS 切类控制） */
-.br-blocks.cover .br-block { box-shadow: 10px 0 26px -8px rgba(201, 162, 39, 0.35), 4px 0 40px rgba(0, 0, 0, 0.5); border-right: 1px solid rgba(201, 162, 39, 0.34); }
-.br-blocks.reveal .br-block { box-shadow: -10px 0 26px -8px rgba(201, 162, 39, 0.3), -4px 0 40px rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(201, 162, 39, 0.3); }
 .br-label {
   position: absolute; left: 50%; top: 50%;
   transform: translate(-50%, -50%);
   display: flex; overflow: hidden;
+  padding: 0.08em 0; /* 给撇捺留出行高内的呼吸位 */
   font-family: var(--font-display, "Noto Serif SC", "STSong", serif);
-  font-weight: 700;
-  font-size: clamp(64px, 12vw, 160px);
+  font-weight: 600;
+  font-size: clamp(40px, 7vw, 96px);
   letter-spacing: 0.3em; text-indent: 0.3em;
-  color: #e8c86a;
-  text-shadow: 0 0 34px rgba(201, 162, 39, 0.55), 0 0 90px rgba(201, 162, 39, 0.3);
+  color: #1a1720;
   white-space: nowrap;
 }
 .br-char { display: inline-block; will-change: transform; }
 `;
 
 let overlay: HTMLDivElement | null = null;
+let dimEl: HTMLDivElement | null = null;
 let blocksWrap: HTMLDivElement | null = null;
 let blocks: HTMLDivElement[] = [];
 let labelEl: HTMLDivElement | null = null;
@@ -76,6 +88,8 @@ function ensureOverlay(): void {
 
   overlay = document.createElement("div");
   overlay.className = "br-overlay";
+  dimEl = document.createElement("div");
+  dimEl.className = "br-dim";
   blocksWrap = document.createElement("div");
   blocksWrap.className = "br-blocks";
   blocks = [];
@@ -87,11 +101,11 @@ function ensureOverlay(): void {
   }
   labelEl = document.createElement("div");
   labelEl.className = "br-label";
-  overlay.append(blocksWrap, labelEl);
+  overlay.append(dimEl, blocksWrap, labelEl);
   document.body.appendChild(overlay);
 }
 
-/** 文案拆字（逐字 span，配合外层 overflow:hidden 遮罩上滑） */
+/** 文案拆字（逐字 span，配合外层 overflow:hidden 遮罩升降） */
 function setLabel(text: string): void {
   if (!labelEl) return;
   labelEl.innerHTML = "";
@@ -101,7 +115,7 @@ function setLabel(text: string): void {
     s.textContent = ch === " " ? " " : ch;
     labelEl.appendChild(s);
   }
-  gsap.set(labelEl.children, { y: "115%", rotate: 5 });
+  gsap.set(labelEl.children, { y: "110%" });
 }
 
 function chars(): HTMLSpanElement[] {
@@ -132,19 +146,20 @@ function lowNote(): void {
 }
 
 /** 底层星空「降生」：揭开时轻微放大归位 + 透明度归位（只对画布做视觉变换） */
-function skySettle(on: boolean): void {
+function skySettle(): void {
   const canvas = document.getElementById("sky-canvas");
   if (!canvas) return;
-  if (on) {
-    gsap.fromTo(
-      canvas,
-      { scale: 1.015, opacity: 0.55 },
-      { scale: 1, opacity: 1, duration: 0.75, ease: "power2.out", overwrite: "auto" },
-    );
-  }
+  gsap.fromTo(
+    canvas,
+    { scale: 1.015, opacity: 0.55 },
+    { scale: 1, opacity: 1, duration: 1.0, ease: "power2.out", overwrite: "auto" },
+  );
 }
 
-/** 盖上：色块左阶梯展开 + 大文案旋升；屏息一拍后调 mid()，再揭开（右阶梯收起 + 星空降生） */
+/**
+ * 盖上：暗场淡入 + 宣纸横条左缘斜切扫满 + 章节名逐字升起；
+ * 盖满后调 mid() 换内容，再揭开（右缘反向斜切收起 + 暗场淡出）。
+ */
 export function playTransition(label: string, mid: () => void): Promise<void> {
   ensureOverlay();
   if (busy) return Promise.resolve();
@@ -152,7 +167,6 @@ export function playTransition(label: string, mid: () => void): Promise<void> {
   setLabel(label);
   const cs = chars();
   overlay!.style.visibility = "visible";
-  blocksWrap!.className = "br-blocks cover";
   lowNote();
 
   return new Promise((resolve) => {
@@ -163,28 +177,28 @@ export function playTransition(label: string, mid: () => void): Promise<void> {
         resolve();
       },
     });
-    tl.set(blocks, { transformOrigin: "left center" })
-      // 盖上：色块左阶梯展开
-      .to(blocks, { scaleX: 1, duration: COVER_S, ease: "brHop", stagger: STAGGER }, 0)
-      // 大文案：逐字旋升 + 字距收拢（0.3em → 0.18em）
-      .to(cs, { y: "0%", rotate: 0, duration: 0.5, ease: "brHop", stagger: 0.04 }, `-=${STAGGER * 1.5}`)
-      .to(labelEl, { letterSpacing: "0.18em", textIndent: "0.18em", duration: 0.5, ease: "power2.out" }, "<")
-      // 屏息一拍（预期感）→ 换内容
+    tl.set(blocks, { transformOrigin: "left center", scaleX: 0 })
+      .set(dimEl, { opacity: 0 })
+      // 盖上：旧页暗场 1.2s 淡入
+      .to(dimEl, { opacity: 1, duration: DIM_COVER_S, ease: "oaDim" }, 0)
+      // 盖上：四条宣纸同时起跑、时长递增 → 平滑斜切扫过
+      .to(blocks, { scaleX: 1, duration: (i) => COVER_DUR[i] ?? 1.2, ease: "oaIn" }, 0)
+      // 章节名逐字升起（同规则时长递增），字现身时背后恰好是宣纸
+      .to(cs, { y: "0%", duration: (i) => 0.75 + i * 0.12, ease: "oaIn" }, 0.05)
+      // 盖满 → 换内容
       .add(() => {
         mid();
-        skySettle(true);
-      }, `+=${HOLD_S}`)
-      // 揭开：文案散下（微旋），色块右阶梯收起
-      .to(cs, { y: "-115%", rotate: -3, duration: 0.36, ease: "power2.in", stagger: 0.024 }, "+=0.12")
-      .set(blocks, { transformOrigin: "right center" })
-      .add(() => {
-        blocksWrap!.className = "br-blocks reveal";
-      }, "<")
-      .to(blocks, { scaleX: 0, duration: REVEAL_S, ease: "brHop", stagger: STAGGER }, "-=0.06");
+        skySettle();
+      }, MID_AT)
+      // 揭开：文字滑回遮罩；色块右缘收起（左条最慢，反向斜切）；暗场淡出
+      .to(cs, { y: "110%", duration: (i) => 0.85 + i * 0.1, ease: "oaIn" }, REVEAL_AT)
+      .set(blocks, { transformOrigin: "right center" }, REVEAL_AT)
+      .to(blocks, { scaleX: 0, duration: (i) => REVEAL_DUR[i] ?? 1.05, ease: "oaIn" }, REVEAL_AT)
+      .to(dimEl, { opacity: 0, duration: DIM_REVEAL_S, ease: "oaDim" }, REVEAL_AT);
   });
 }
 
-/** 开屏揭开：色块全盖 → 品牌名大文案升起 → 停顿凝住一拍 → 色块右收，星空降生 */
+/** 开屏揭开：宣纸满屏 + 品牌名升起 → 凝住一拍 → 右缘斜切揭开，星空降生 */
 export function playIntro(label: string): Promise<void> {
   ensureOverlay();
   if (busy) return Promise.resolve();
@@ -192,7 +206,7 @@ export function playIntro(label: string): Promise<void> {
   setLabel(label);
   const cs = chars();
   overlay!.style.visibility = "visible";
-  blocksWrap!.className = "br-blocks reveal";
+  gsap.set(dimEl, { opacity: 1 });
   gsap.set(blocks, { scaleX: 1, transformOrigin: "right center" });
 
   return new Promise((resolve) => {
@@ -203,15 +217,16 @@ export function playIntro(label: string): Promise<void> {
         resolve();
       },
     });
-    tl.to(cs, { y: "0%", rotate: 0, duration: 0.55, ease: "brHop", stagger: 0.05 }, 0.12)
-      .to(labelEl, { letterSpacing: "0.18em", textIndent: "0.18em", duration: 0.55, ease: "power2.out" }, "<")
+    // 品牌名逐字升起
+    tl.to(cs, { y: "0%", duration: (i) => 0.75 + i * 0.12, ease: "oaIn" }, 0.35)
       // 凝住一拍（品牌露出足够久）
-      .to(cs, { y: "-115%", rotate: -3, duration: 0.36, ease: "power2.in", stagger: 0.026 }, "+=1.1")
+      .to(cs, { y: "110%", duration: (i) => 0.85 + i * 0.1, ease: "oaIn" }, "+=1.15")
       .add(() => {
-        skySettle(true);
+        skySettle();
         lowNote();
       }, "<")
-      .to(blocks, { scaleX: 0, duration: REVEAL_S, ease: "brHop", stagger: STAGGER }, "-=0.06");
+      .to(blocks, { scaleX: 0, duration: (i) => REVEAL_DUR[i] ?? 1.05, ease: "oaIn" }, "<")
+      .to(dimEl, { opacity: 0, duration: DIM_REVEAL_S, ease: "oaDim" }, "<");
   });
 }
 
@@ -232,7 +247,7 @@ export function riseIn(el: HTMLElement): void {
   }
   gsap.fromTo(
     el.children,
-    { y: "115%" },
-    { y: "0%", duration: 0.55, ease: "brHop", stagger: 0.028, overwrite: "auto" },
+    { y: "110%" },
+    { y: "0%", duration: 0.75, ease: "oaIn", stagger: 0.05, overwrite: "auto" },
   );
 }
