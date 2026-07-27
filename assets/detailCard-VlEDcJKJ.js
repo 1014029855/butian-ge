@@ -4427,29 +4427,44 @@ void main() {
 `;let bl=!1;function Fg(){if(bl||typeof document>"u")return;const i=document.createElement("style");i.dataset.skyLabels="",i.textContent=Ng,document.head.appendChild(i),bl=!0}function Og(i,e){if(i instanceof Map){const t=i.get(e);return t?[t.x,t.y,t.z]:void 0}return i(e)}function r_(i,e,t){Fg();const n=new di;n.name="sky-labels";const r=new Dg;r.setSize(i.clientWidth||window.innerWidth,i.clientHeight||window.innerHeight);const s=r.domElement;s.style.position="absolute",s.style.inset="0",s.style.pointerEvents="none",i.appendChild(s);const a=[],o=new D;for(const h of e){const y=new D;let A=0;for(const T of h.stars){const R=Og(t,T);R&&(y.add(o.set(R[0],R[1],R[2])),A++)}if(A===0||y.lengthSq()<1e-6)continue;y.normalize().multiplyScalar(Lg);const S=document.createElement("div");S.className="sky-label",S.textContent=h.name;const w=new Pg(S);w.position.copy(y),n.add(w),a.push({obj:w,el:S,angle:Math.PI})}let l=!0;const c=new D,f=new D,d=new D,u=180/Math.PI,p=Ug-Tl;function _(h){if(!l)return;h.getWorldPosition(c),h.getWorldDirection(f);for(const A of a)d.copy(A.obj.position).sub(c).normalize(),A.angle=Math.acos(Hr.clamp(d.dot(f),-1,1));const y=[...a].sort((A,S)=>A.angle-S.angle);for(let A=0;A<y.length;A++){const S=y[A],w=S.angle*u,T=A<Ig?Hr.clamp(1-(w-Tl)/p,0,1):0;S.el.style.opacity=T.toFixed(3),S.el.style.visibility=T<=0?"hidden":"visible"}}function M(h){if(l=h,n.visible=h,s.style.display=h?"":"none",!h)for(const y of a)y.el.style.opacity="0",y.el.style.visibility="hidden"}function m(){for(const h of a)n.remove(h.obj),h.el.remove();a.length=0,s.remove()}return{group:n,renderer:r,update:_,setVisible:M,dispose:m}}const Al=8,Bg="《步天歌》引文待辑——「星宿之列，俟考原歌」。",zg=`
 .sky3d-detail-card {
   position: fixed;
-  min-width: 220px;
-  max-width: 300px;
-  padding: 14px 16px;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 18px 20px;
   background: linear-gradient(160deg, rgba(22, 38, 56, 0.96) 0%, rgba(13, 13, 17, 0.96) 100%);
   border: 1px solid rgba(201, 162, 39, 0.45);
-  border-radius: 4px;
+  border-radius: 6px;
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55), inset 0 0 18px rgba(201, 162, 39, 0.06);
   color: #fce1b6;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
   z-index: 20;
   pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.985);
+  transition: opacity 0.26s ease-out, transform 0.26s ease-out;
+}
+.sky3d-detail-card.on { opacity: 1; transform: none; }
+/* 描金双线：与章节面板、提示条同一语言 */
+.sky3d-detail-card::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  border-radius: 3px;
+  pointer-events: none;
 }
 .sky3d-detail-card[hidden] { display: none; }
 .sky3d-detail-card h2 {
   font-family: "STSong", "SimSun", "Songti SC", serif;
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 400;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: #c9a227;
   text-shadow: 0 0 8px rgba(201, 162, 39, 0.3);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(201, 162, 39, 0.28);
 }
 .sky3d-detail-card .meta {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 12px;
   letter-spacing: 0.1em;
   opacity: 0.7;
@@ -4460,23 +4475,26 @@ void main() {
   font-size: 13px;
   line-height: 1.9;
 }
+.sky3d-detail-card ul.cols { columns: 2; column-gap: 18px; }
 .sky3d-detail-card li::before {
   content: "·";
   color: #af915f;
   margin-right: 6px;
 }
+/* 《步天歌》引文：左侧金竖线引文块，宋体大一号 */
 .sky3d-detail-card .quote {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(201, 162, 39, 0.25);
+  margin-top: 12px;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid rgba(201, 162, 39, 0.65);
   font-family: "STSong", "SimSun", "Songti SC", serif;
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  line-height: 1.8;
-  color: #af915f;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  line-height: 2;
+  color: #d9b96a;
 }
 .sky3d-detail-card .quote-src {
-  margin-top: 4px;
+  margin-top: 6px;
+  padding-left: 11px;
   font-family: "STSong", "SimSun", "Songti SC", serif;
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -4488,8 +4506,8 @@ void main() {
 `;let wl=!1;function Gg(){if(wl)return;const i=document.createElement("style");i.dataset.sky3dDetailCard="",i.textContent=zg,document.head.appendChild(i),wl=!0}function Rr(i){return i.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function Vg(i){return i.name??`HIP ${i.hip}`}function s_(i=document.body){Gg();const e=document.createElement("div");e.className="sky3d-detail-card",e.hidden=!0,i.appendChild(e);function t(s,a,o){const l=s.stars.slice(0,Al);e.innerHTML=`
       <h2>${Rr(s.name)}</h2>
       <p class="meta">${s.starCount} 颗成员星</p>
-      <ul>${l.map(u=>`<li>${Rr(Vg(u))}</li>`).join("")}</ul>
+      <ul class="${l.length>4?"cols":""}">${l.map(u=>`<li>${Rr(Vg(u))}</li>`).join("")}</ul>
       ${s.starCount>Al?`<p class="meta">… 等 ${s.starCount} 星</p>`:""}
       <p class="quote">${Rr(s.quote??Bg)}</p>
       ${s.quote&&s.quoteFrom?`<p class="quote-src">——《步天歌》 · ${Rr(s.quoteFrom)}</p>`:""}
-    `,e.hidden=!1;const c=e.getBoundingClientRect();let f=a+18,d=o-20;f+c.width>window.innerWidth-12&&(f=a-c.width-18),d+c.height>window.innerHeight-12&&(d=window.innerHeight-c.height-12),d<12&&(d=12),e.style.left=`${f}px`,e.style.top=`${d}px`}function n(){e.hidden=!0}function r(){e.remove()}return{el:e,show:t,hide:n,dispose:r}}export{zi as A,Et as B,Xg as C,Hg as D,Dn as E,Ya as F,di as G,ql as H,Ue as I,Zl as J,Ut as K,Xl as L,je as M,zu as P,Ei as Q,Lu as S,$l as T,D as V,$g as W,Hr as a,Wg as b,nt as c,St as d,_l as e,Bu as f,Ou as g,Zg as h,kg as i,Kt as j,n_ as k,i_ as l,s_ as m,t_ as n,e_ as o,r_ as p,Jg as q,Xi as r,Qg as s,jg as t,Ki as u,Kg as v,jm as w,Yg as x,qg as y,ln as z};
+    `,e.hidden=!1,e.classList.remove("on");const c=e.getBoundingClientRect();let f=a+18,d=o-20;f+c.width>window.innerWidth-12&&(f=a-c.width-18),d+c.height>window.innerHeight-12&&(d=window.innerHeight-c.height-12),d<12&&(d=12),e.style.left=`${f}px`,e.style.top=`${d}px`,requestAnimationFrame(()=>e.classList.add("on"))}function n(){e.classList.remove("on"),e.hidden=!0}function r(){e.remove()}return{el:e,show:t,hide:n,dispose:r}}export{zi as A,Et as B,Xg as C,Hg as D,Dn as E,Ya as F,di as G,ql as H,Ue as I,Zl as J,Ut as K,Xl as L,je as M,zu as P,Ei as Q,Lu as S,$l as T,D as V,$g as W,Hr as a,Wg as b,nt as c,St as d,_l as e,Bu as f,Ou as g,Zg as h,kg as i,Kt as j,n_ as k,i_ as l,s_ as m,t_ as n,e_ as o,r_ as p,Jg as q,Xi as r,Qg as s,jg as t,Ki as u,Kg as v,jm as w,Yg as x,qg as y,ln as z};
