@@ -24,14 +24,14 @@ const CH8_CSS = `
 }
 .ch8-panel {
   width: 100%;
-  max-width: 34em;
-  max-height: 86vh;
+  max-width: 1060px;
+  max-height: 88vh;
   overflow: hidden;
-  background: rgba(13, 13, 17, 0.72);
+  background: rgba(13, 13, 17, 0.6);
   border: 1px solid rgba(175, 145, 95, 0.28);
-  border-radius: 10px;
-  padding: 30px 34px;
-  backdrop-filter: blur(4px);
+  border-radius: 12px;
+  padding: 40px 48px;
+  backdrop-filter: blur(8px);
   text-align: center;
   opacity: 0;
 }
@@ -52,9 +52,9 @@ const CH8_CSS = `
 }
 .ch8-title {
   font-family: "STSong", "SimSun", "Songti SC", serif;
-  font-size: 30px;
+  font-size: clamp(38px, 4.2vw, 52px);
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: #c9a227;
 }
 .ch8-seal {
@@ -87,9 +87,19 @@ const CH8_CSS = `
   color: #fce1b6;
   opacity: 0.88;
 }
-.ch8-credits {
+/* 结语：全章情绪落点，大字号宋体淡金 */
+.ch8-body p.ch8-coda {
   margin-top: 20px;
-  padding-top: 18px;
+  font-family: "STSong", "SimSun", "Songti SC", serif;
+  font-size: clamp(19px, 2.3vw, 27px);
+  letter-spacing: 0.14em;
+  line-height: 1.8;
+  color: #c9a227;
+  opacity: 0.95;
+}
+.ch8-credits {
+  margin-top: 26px;
+  padding-top: 22px;
   border-top: 1px solid rgba(175, 145, 95, 0.22);
   opacity: 0;
 }
@@ -98,14 +108,23 @@ const CH8_CSS = `
   letter-spacing: 0.34em;
   color: #af915f;
 }
+/* 三栏致谢（editorial 分栏；窄屏单栏） */
+.ch8-credit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  margin-top: 16px;
+  text-align: left;
+}
 .ch8-credit-group {
-  margin-top: 12px;
+  border-top: 1px solid rgba(201, 162, 39, 0.3);
+  padding-top: 12px;
 }
 .ch8-credit-group h3 {
   font-family: "STSong", "SimSun", "Songti SC", serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.24em;
   color: #c9a227;
 }
 .ch8-credit-group p {
@@ -123,6 +142,10 @@ const CH8_CSS = `
   pointer-events: auto; /* .chapter 层 pointer-events:none，链接需单独放开 */
 }
 .ch8-credit-group a:hover { color: #ffffff; }
+@media (max-width: 760px) {
+  .ch8-panel { padding: 26px 22px; }
+  .ch8-credit-grid { grid-template-columns: 1fr; gap: 18px; text-align: center; }
+}
 `;
 
 let styleInjected = false;
@@ -180,9 +203,16 @@ export function createChapter(ctx: ChapterCtx): Chapter {
         ${copy.seal ? `<div class="ch8-seal">${escapeHtml(copy.seal)}</div>` : ""}
       </div>
       <p class="ch8-hook">${escapeHtml(copy.hook)}</p>
-      <div class="ch8-body">${copy.body.map((b) => `<p>${escapeHtml(b)}</p>`).join("")}</div>
+      <div class="ch8-body">${copy.body
+        .map((b, i) =>
+          i === copy.body.length - 1
+            ? `<p class="ch8-coda">${escapeHtml(b)}</p>`
+            : `<p>${escapeHtml(b)}</p>`,
+        )
+        .join("")}</div>
       <div class="ch8-credits">
         <p class="ch8-credits-heading">${escapeHtml(CREDITS.heading)}</p>
+        <div class="ch8-credit-grid">
         ${CREDITS.groups
           .map(
             (g) => `
@@ -192,6 +222,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
           </div>`,
           )
           .join("")}
+        </div>
       </div>
     </div>
   `;

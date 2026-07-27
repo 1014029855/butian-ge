@@ -3,11 +3,12 @@
  * 桌面与手机通用：按钮 ≥44px 触控面、墨蓝描金胶囊、不挡画布交互
  * （容器 pointer-events:none，仅按钮本体 auto）。自挂载、自注入样式。
  *
- * 滚动用原生 scrollIntoView({behavior:"smooth"})——ScrollTrigger 的
- * scrub 随平滑滚动自然驱动全部章节动画，无需额外插件。
+ * 滚动由 Lenis 平滑滚动接管（smoothScroll.ts）——ScrollTrigger 的
+ * scrub 随平滑滚动自然驱动全部章节动画；转场遮盖下瞬时跳章。
  */
 
 import { playTransition } from "./blockReveal";
+import { lockScroll, scrollToY } from "./smoothScroll";
 
 /**
  * 全屏切换（翻页按钮与 app.ts 的 F 键共用入口）。
@@ -145,7 +146,9 @@ export function createPager({ sections, names }: PagerOptions): { setCurrent(i: 
     for (let k = 0; k < sections.length; k++) if (sections[k].offsetTop <= target + EPS) ci = k;
     const heading =
       sections[ci]?.querySelector("h1, h2")?.textContent?.trim() || names[ci] || "";
-    void playTransition(heading, () => window.scrollTo({ top: target, behavior: "instant" }));
+    // 转场期间锁滚，播完解锁，防止滚轮穿帮
+    lockScroll(true);
+    void playTransition(heading, () => scrollToY(target, true)).finally(() => lockScroll(false));
   }
   prev.addEventListener("click", () => go(-1));
   next.addEventListener("click", () => go(1));

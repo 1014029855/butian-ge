@@ -19,6 +19,7 @@ import { setupChapters } from "./chapters";
 import { createCursor } from "./cursor";
 import { createMilkyWay } from "./MilkyWay";
 import { createPager, toggleFullscreen } from "./pager";
+import { initSmoothScroll } from "./smoothScroll";
 import { R, SkyApp } from "./SkyApp";
 
 /** 相机总进度阻尼系数（/秒），越大跟手越快 */
@@ -58,6 +59,9 @@ async function boot(): Promise<void> {
     return;
   }
   loadingEl?.remove();
+
+  // Lenis 平滑滚动：滚轮插值平滑，ScrollTrigger 联动；触屏保持原生惯性
+  initSmoothScroll();
 
   // 程序生成银河带（永久挂载，随天球刚体旋转）与环境音开关（默认静音）
   sky.addSkyObject(createMilkyWay(R).group);

@@ -142,12 +142,12 @@ div.sky-label { font-family: var(--font-display); }
 /* ---- 章节文案面板（占位章通用） ---- */
 .chapter-panel {
   position: absolute;
-  max-width: 420px;
-  background: rgba(13, 13, 17, 0.72);
+  max-width: 440px;
+  background: rgba(13, 13, 17, 0.62);
   border: 1px solid rgba(175, 145, 95, 0.28);
   border-radius: 10px;
-  padding: 22px 24px;
-  backdrop-filter: blur(4px);
+  padding: 26px 28px;
+  backdrop-filter: blur(8px);
 }
 .chapter-panel--left { left: 6vw; bottom: 10vh; }
 .chapter-panel--right { right: 6vw; bottom: 10vh; }
@@ -159,14 +159,23 @@ div.sky-label { font-family: var(--font-display); }
 }
 .chapter-panel h2 {
   font-family: var(--font-display);
-  font-size: 30px;
+  font-size: clamp(38px, 4.2vw, 52px);
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: var(--gold);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
-.chapter-panel p { font-size: 15px; line-height: 2; opacity: 0.88; }
-.chapter-panel .hook { margin-bottom: 6px; }
+.chapter-panel p { font-size: 15px; line-height: 2.05; opacity: 0.88; }
+/* hook 引子句：宋体淡金，与黑体正文拉开层级 */
+.chapter-panel .hook {
+  font-family: var(--font-display);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  line-height: 1.9;
+  color: var(--gold-dim);
+  opacity: 1;
+  margin-bottom: 10px;
+}
 
 /* ---- 眉题与朱砂印 ---- */
 .eyebrow {
@@ -212,15 +221,20 @@ div.sky-label { font-family: var(--font-display); }
 .chapter.inview .chapter-panel { opacity: 1; transform: translateY(0); }
 .chapter.inview .chapter-panel--center { transform: translate(-50%, -50%); }
 
-/* ---- 章节入场加厚：面板直接子元素依次上浮 18px（0.6s 缓出，stagger 0.08s
-   递增，纯 CSS）。transition-delay 只在 .inview 态生效——退出时回到 0 延迟，
-   子元素随面板同步集体退场；第 8 个及以后子元素共用 0.56s 上限延迟。 ---- */
+/* ---- 章节入场加厚：面板直接子元素「遮罩升起」——clip-path 从底部揭开
+   同时上浮 16px（0.7s 标志缓动，stagger 0.08s 递增，纯 CSS）。transition-delay
+   只在 .inview 态生效——退出时回到 0 延迟，子元素随面板同步集体退场；
+   第 8 个及以后子元素共用 0.56s 上限延迟。 ---- */
 .chapter .chapter-panel > * {
   opacity: 0;
-  transform: translateY(18px);
-  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  transform: translateY(16px);
+  clip-path: inset(-20% -8% 100% -8%);
+  transition:
+    opacity 0.7s var(--ease-sig),
+    transform 0.7s var(--ease-sig),
+    clip-path 0.7s var(--ease-sig);
 }
-.chapter.inview .chapter-panel > * { opacity: 1; transform: translateY(0); }
+.chapter.inview .chapter-panel > * { opacity: 1; transform: translateY(0); clip-path: inset(-20% -8% -20% -8%); }
 .chapter.inview .chapter-panel > *:nth-child(2) { transition-delay: 0.08s; }
 .chapter.inview .chapter-panel > *:nth-child(3) { transition-delay: 0.16s; }
 .chapter.inview .chapter-panel > *:nth-child(4) { transition-delay: 0.24s; }
@@ -315,9 +329,9 @@ div.sky-label { font-family: var(--font-display); }
 .atlas-panel.active { opacity: 1; transform: translateY(-50%); }
 .atlas-panel h2 {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 400;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   color: var(--gold);
   margin-bottom: 10px;
 }
@@ -371,6 +385,42 @@ div.sky-label { font-family: var(--font-display); }
   opacity: 0.7;
 }
 .fallback-credits { margin-top: 18px; font-size: 12px; opacity: 0.5; letter-spacing: 0.1em; }
+
+/* ---- 细节质感：选中、滚动条、焦点环、眉题金线 ---- */
+::selection { background: rgba(201, 162, 39, 0.85); color: #14100a; }
+
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-track { background: #0a0c14; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.55), rgba(143, 112, 25, 0.55));
+  border-radius: 5px;
+  border: 2px solid #0a0c14;
+}
+html { scrollbar-width: thin; scrollbar-color: rgba(201, 162, 39, 0.5) #0a0c14; }
+
+:focus-visible {
+  outline: 1px solid rgba(201, 162, 39, 0.8);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* 眉题下压一道金细线（雕版栏线意象） */
+.eyebrow { position: relative; padding-bottom: 9px; }
+.eyebrow::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  bottom: 0;
+  width: 26px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201, 162, 39, 0.75), rgba(201, 162, 39, 0));
+}
+.chapter-panel--center .eyebrow::after {
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  background: linear-gradient(90deg, rgba(201, 162, 39, 0), rgba(201, 162, 39, 0.75), rgba(201, 162, 39, 0));
+}
 
 @media (max-width: 860px) {
   .chapter-panel { left: 5vw; right: 5vw; max-width: none; }

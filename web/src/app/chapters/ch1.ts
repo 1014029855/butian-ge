@@ -40,14 +40,19 @@ const CH1_CSS = `
   font-size: clamp(56px, 9vw, 110px);
   font-weight: 700;
   letter-spacing: ${TITLE_TRACKING_EM}em;
-  background: linear-gradient(160deg, #f2dd9a 15%, #c9a227 55%, #8f7019 100%);
+  /* 鎏金：宽幅渐变 + background-size 放大两倍，入场后缓慢流动（金属呼吸感） */
+  background: linear-gradient(160deg, #f2dd9a 12%, #c9a227 38%, #8f7019 52%, #c9a227 66%, #f2dd9a 88%);
+  background-size: 240% 240%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   filter: drop-shadow(0 0 26px rgba(201, 162, 39, 0.45));
-  margin-bottom: 24px;
-  /* 开屏即现：标题只随页面加载做一次入场动画，与滚动进度脱钩 */
-  animation: ch1-title-in 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both;
+  margin-bottom: 18px;
+  /* 开屏即现：标题只随页面加载做一次入场动画，与滚动进度脱钩；
+     入场完毕后鎏金开始缓慢流动 */
+  animation:
+    ch1-title-in 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both,
+    ch1-sheen 12s ease-in-out 1.8s infinite alternate;
 }
 @keyframes ch1-title-in {
   from {
@@ -62,6 +67,26 @@ const CH1_CSS = `
     filter: blur(0) drop-shadow(0 0 26px rgba(201, 162, 39, 0.45));
     transform: translateY(0);
   }
+}
+@keyframes ch1-sheen {
+  from { background-position: 0% 30%; }
+  to { background-position: 100% 70%; }
+}
+/* 英文副标：标题下的衬线小字（editorial 题签） */
+.ch1-sub-en {
+  font-family: "Times New Roman", "Noto Serif SC", serif;
+  font-size: clamp(10px, 1vw, 13px);
+  letter-spacing: 0.52em;
+  text-indent: 0.52em;
+  color: #af915f;
+  opacity: 0;
+  animation: ch1-sub-en-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) 1.0s both;
+  margin-bottom: 22px;
+  text-transform: uppercase;
+}
+@keyframes ch1-sub-en-in {
+  from { opacity: 0; letter-spacing: 0.9em; text-indent: 0.9em; }
+  to { opacity: 0.9; letter-spacing: 0.52em; text-indent: 0.52em; }
 }
 .ch1-hook {
   font-size: 17px;
@@ -114,6 +139,36 @@ const CH1_CSS = `
   0%, 100% { transform: translateX(-50%) translateY(0); }
   50% { transform: translateX(-50%) translateY(8px); }
 }
+/* 滚动指引：下方一条渐隐金线 + 光点往复滑落 */
+.ch1-cue::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 10px);
+  width: 1px;
+  height: 46px;
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.5), rgba(201, 162, 39, 0.06));
+  transform: translateX(-50%);
+}
+.ch1-cue::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 10px);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #f2dd9a;
+  box-shadow: 0 0 6px rgba(242, 221, 154, 0.9);
+  transform: translateX(-50%);
+  animation: ch1-cue-drop 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes ch1-cue-drop {
+  0% { transform: translateX(-50%) translateY(0); opacity: 0; }
+  18% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { transform: translateX(-50%) translateY(42px); opacity: 0; }
+}
 `;
 
 let styleInjected = false;
@@ -154,6 +209,7 @@ export function createChapter(ctx: ChapterCtx): Chapter {
   stage.innerHTML = `
     <p class="ch1-eyebrow">${escapeHtml(copy.eyebrow)}</p>
     <h1 class="ch1-title">${escapeHtml(copy.title)}</h1>
+    <p class="ch1-sub-en">A Star Atlas of Three Thousand Years</p>
     <p class="ch1-hook">${escapeHtml(copy.hook)}</p>
     <div class="ch1-body">${copy.body.map((b) => `<p>${escapeHtml(b)}</p>`).join("")}</div>
     ${copy.seal ? `<div class="ch1-seal">${escapeHtml(copy.seal)}</div>` : ""}
