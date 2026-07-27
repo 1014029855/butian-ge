@@ -32,10 +32,18 @@
  */
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { riseIn } from "./blockReveal";
 import { COPY, type ChapterCopy } from "./copy";
 import type { SkyApp } from "./SkyApp";
 
 gsap.registerPlugin(ScrollTrigger);
+
+/** 章节标题拆字入场：进入章节时 h2 逐字上滑（overflow 遮罩，hop 手感） */
+function riseChapterTitles(root: HTMLElement): void {
+  root
+    .querySelectorAll<HTMLElement>(".chapter-panel h2, .atlas-panel h2")
+    .forEach((h) => riseIn(h));
+}
 
 export interface ChapterCtx {
   sky: SkyApp;
@@ -115,8 +123,14 @@ export function setupChapters(
         start: "top top",
         end: "bottom bottom",
         scrub: true,
-        onEnter: () => chapter.enter(),
-        onEnterBack: () => chapter.enter(),
+        onEnter: () => {
+          chapter.enter();
+          riseChapterTitles(root);
+        },
+        onEnterBack: () => {
+          chapter.enter();
+          riseChapterTitles(root);
+        },
         onLeave: () => chapter.exit(),
         onLeaveBack: () => chapter.exit(),
         onUpdate: (self) => {

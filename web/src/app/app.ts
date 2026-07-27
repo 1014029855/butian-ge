@@ -13,6 +13,7 @@
  */
 import "./app.css";
 import { initAmbient } from "./ambient";
+import { playIntro } from "./blockReveal";
 import { CameraRig, CHAPTER_KEYS } from "./CameraRig";
 import { setupChapters } from "./chapters";
 import { createCursor } from "./cursor";
@@ -61,6 +62,9 @@ async function boot(): Promise<void> {
   // 程序生成银河带（永久挂载，随天球刚体旋转）与环境音开关（默认静音）
   sky.addSkyObject(createMilkyWay(R).group);
   initAmbient();
+
+  // 开屏 Block Reveal：色块全盖 →「步天歌」逐字升起 → 色块右收，星空揭开
+  void playIntro("步天歌");
 
   const rig = new CameraRig(CHAPTER_KEYS);
 

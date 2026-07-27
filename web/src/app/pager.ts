@@ -7,6 +7,8 @@
  * scrub 随平滑滚动自然驱动全部章节动画，无需额外插件。
  */
 
+import { playTransition } from "./blockReveal";
+
 /**
  * 全屏切换（翻页按钮与 app.ts 的 F 键共用入口）。
  * 环境不支持全屏时静默忽略；requestFullscreen 被浏览器拒绝（如无用户手势）也不抛错。
@@ -69,7 +71,6 @@ export function createPager({ sections, names }: PagerOptions): { setCurrent(i: 
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.appendChild(style);
-
   const root = document.createElement("div");
   root.className = "app-pager";
   const prev = document.createElement("button");
@@ -138,7 +139,13 @@ export function createPager({ sections, names }: PagerOptions): { setCurrent(i: 
       dir > 0
         ? (pts.find((p) => p > y + EPS) ?? pts[pts.length - 1])
         : ([...pts].reverse().find((p) => p < y - EPS) ?? 0);
-    if (target !== undefined) window.scrollTo({ top: target, behavior: "smooth" });
+    if (target === undefined) return;
+    // Block Reveal 转场：色块盖上 → 章节名升起 → 瞬时跳转 → 色块揭开
+    let ci = 0;
+    for (let k = 0; k < sections.length; k++) if (sections[k].offsetTop <= target + EPS) ci = k;
+    const heading =
+      sections[ci]?.querySelector("h1, h2")?.textContent?.trim() || names[ci] || "";
+    void playTransition(heading, () => window.scrollTo({ top: target, behavior: "instant" }));
   }
   prev.addEventListener("click", () => go(-1));
   next.addEventListener("click", () => go(1));
